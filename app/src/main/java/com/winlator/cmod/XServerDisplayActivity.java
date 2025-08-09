@@ -100,7 +100,6 @@ import com.winlator.cmod.xenvironment.ImageFs;
 import com.winlator.cmod.xenvironment.XEnvironment;
 import com.winlator.cmod.xenvironment.components.ALSAServerComponent;
 import com.winlator.cmod.xenvironment.components.BionicProgramLauncherComponent;
-import com.winlator.cmod.xenvironment.components.GlibcProgramLauncherComponent;
 import com.winlator.cmod.xenvironment.components.GuestProgramLauncherComponent;
 import com.winlator.cmod.xenvironment.components.PulseAudioComponent;
 import com.winlator.cmod.xenvironment.components.SysVSharedMemoryComponent;
@@ -199,9 +198,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     private String screenEffectProfile;
 
-    private GlibcProgramLauncherComponent glibcLauncher; // Reference to GlibcProgramLauncherComponent
-    private BionicProgramLauncherComponent bionicLauncher; // Reference to BionicProgramLauncherComponent
-    private FileObserver restartTriggerObserver;
+    private BionicProgramLauncherComponent bionicLauncher;
     private EnvVars overrideEnvVars;
 
 
@@ -239,38 +236,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         AppUtils.hideSystemUI(this);
         AppUtils.keepScreenOn(this);
         setContentView(R.layout.xserver_display_activity);
-
-//        String RESTART_TRIGGER_PATH = "/data/user/0/com.winlator/files/imagefs/tmp/winlator_restart_trigger";
-//        String RESTART_TRIGGER_DIR = "/data/user/0/com.winlator/files/imagefs/tmp/";
-//
-//        restartTriggerObserver = new FileObserver(RESTART_TRIGGER_DIR, FileObserver.CLOSE_WRITE | FileObserver.CREATE) {
-//            @Override
-//            public void onEvent(int event, String path) {
-//                if (path != null && path.equals("winlator_restart_trigger") && event == FileObserver.CLOSE_WRITE) {
-//                    Log.d("XServerDisplayActivity", "Detected trigger file creation/modification, restarting wineserver.");
-//                    if (glibcLauncher != null) {
-//                        glibcLauncher.restartWineServer();
-//                        //setupWineSystemFiles();
-//                        setupXEnvironment();
-//                    } else {
-//                        Log.e("XServerDisplayActivity", "glibcLauncher is null; cannot restart wineserver.");
-//                    }
-//                }
-//            }
-//        };
-//        restartTriggerObserver.startWatching();
-
-
-//        // Test file creation right after starting the observer
-//        try {
-//            File testFile = new File(RESTART_TRIGGER_PATH);
-//            testFile.createNewFile();
-//            Log.d("XServerDisplayActivity", "Test file created to trigger observer.");
-//        } catch (IOException e) {
-//            Log.e("XServerDisplayActivity", "Failed to create test file: " + e.getMessage());
-//        }
-
-
 
         final PreloaderDialog preloaderDialog = new PreloaderDialog(this);
         preferences = PreferenceManager.getDefaultSharedPreferences(this);
@@ -863,7 +828,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     protected void onDestroy() {
         savePlaytimeData(); // Save on destroy
         handler.removeCallbacks(savePlaytimeRunnable);
-        if (restartTriggerObserver != null) restartTriggerObserver.stopWatching();
         super.onDestroy();
     }
 
@@ -1139,7 +1103,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 shortcut
         );
         guestProgramLauncherComponent = bionicLauncher;
-        glibcLauncher = null; // We're not using glibc in this case
 
         // Additional container checks and environment configuration
         if (container != null) {
