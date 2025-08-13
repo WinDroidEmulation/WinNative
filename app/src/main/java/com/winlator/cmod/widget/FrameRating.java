@@ -108,7 +108,7 @@ public class FrameRating extends FrameLayout implements Runnable {
         if (gpuName != null)
             tvGPU.setText(gpuName);
         else
-            tvGPU.setText(GPUInformation.getRenderer());
+            tvGPU.setText(GPUInformation.getRenderer(null, context));
         tvRAM.setText(getAvailableRAM() + " GB Used / " + totalRAM + " Total");
     }
 }

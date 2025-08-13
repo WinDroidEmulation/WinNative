@@ -67,7 +67,8 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
             if (convertView == null) {
                 convertView = (View)new TextView(getContext());
             }
-            ((TextView)convertView).setText(extensions.size() + " System Extensions");
+            Log.d(TAG, "Extensions size is: " + extensions.size());
+            ((TextView)convertView).setText(extensions.size() + " Extensions");
             return convertView;
         }
 
@@ -129,6 +130,11 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
         Log.i(TAG, "Written config " + graphicsDriverConfig);
         return graphicsDriverConfig;
     }
+
+    private ArrayList<String> queryAvailableExtensions(String driver, Context context) {
+        ArrayList<String> availableExtensions = new ArrayList<>(Arrays.asList(GPUInformation.enumerateExtensions(driver, context)));
+        return availableExtensions;
+    }
   
     public GraphicsDriverConfigDialog(View anchor, String graphicsDriver, TextView graphicsDriverVersionView) {
         super(anchor.getContext(), R.layout.graphics_driver_config_dialog);
@@ -160,7 +166,25 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 selectedVersion = sVersion.getSelectedItem().toString();
-                Log.d(TAG, "User selected version: " + selectedVersion);
+                ArrayList<String> availableExtensions = queryAvailableExtensions(selectedVersion, anchor.getContext());
+                String blacklistedExtensions = "";
+
+                extensionsState.clear();
+
+                if(selectedVersion.equals(initialVersion))
+                    blacklistedExtensions = blExtensions;
+
+                String[] bl = blacklistedExtensions.split("\\,");
+
+                for (String extension : bl) {
+                    if (!extension.isEmpty() && availableExtensions.contains(extension)) {
+                        extensionsState.put(extension, false);
+                    }
+                }
+
+                ExtensionAdapter adapter = new ExtensionAdapter(anchor.getContext(), availableExtensions);
+                sAvailableExtensions.setAdapter(null);
+                sAvailableExtensions.setAdapter(adapter);
             }
 
             @Override
@@ -236,30 +260,10 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
         AdrenotoolsManager adrenotoolsManager = new AdrenotoolsManager(context);
         wrapperVersions.addAll(adrenotoolsManager.enumarateInstalledDrivers());
 
-
-        availableExtensions = new ArrayList<>(Arrays.asList(GPUInformation.enumerateExtensions()));
-
-        // Remove essential and wrapper disabled extensions
-        String[] essentialExtensions = {"VK_EXT_hdr_metadata", "VK_GOOGLE_display_timing", "VK_KHR_shader_float_controls", "VK_KHR_shader_presentable_image", "VK_EXT_image_compression_control_swapchain"};
-        for (String extension : essentialExtensions) {
-            availableExtensions.remove(extension);
-        }
-
         // Set the adapter and select the initial version
         ArrayAdapter<String> wrapperAdapter = new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, wrapperVersions);
-        ExtensionAdapter extensionsAdapter = new ExtensionAdapter(context, availableExtensions);
-
-        String[] bl = blExtensions.split("\\,");
-
-        for (String extension : bl) {
-            if (!extension.isEmpty()) {
-                Log.d("GraphicsDriverConfigDialog", "Getting initial blacklisted extension: " + extension);
-                extensionsState.put(extension, false);
-            }
-        }
         
         sVersion.setAdapter(wrapperAdapter);
-        sAvailableExtensions.setAdapter(extensionsAdapter);
         
         // We can start logging selected graphics driver and initial version
         Log.d(TAG, "Graphics driver: " + graphicsDriver);

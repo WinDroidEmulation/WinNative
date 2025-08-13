@@ -6,6 +6,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wno-unused-function -Wimplicit-function
 
 add_subdirectory(OpenXR-SDK)
 add_subdirectory(patchelf)
+add_subdirectory(adrenotools/lib/linkernsbypass)
+add_subdirectory(adrenotools/src/hook)
 
 # Add Winlator shared library
 add_library(winlator SHARED
@@ -22,7 +24,17 @@ add_library(winlator SHARED
         winlator/alsa_client.c
         winlator/patchelf_wrapper.cpp
         winlator/vulkan.cpp
+        adrenotools/src/bcenabler.cpp
+        adrenotools/src/driver.cpp
+        adrenotools/include/adrenotools/bcenabler.h
+        adrenotools/include/adrenotools/driver.h
+        adrenotools/include/adrenotools/priv.h
 )
+
+target_include_directories(winlator PUBLIC adrenotools/include)
+target_include_directories(winlator PRIVATE adrenotools)
+target_compile_options(winlator PRIVATE -Wall -Wextra)
+target_link_options(winlator PRIVATE "-Wl,-s,--exclude-libs,liblinkernsbypass.a")
 
 target_link_libraries(winlator
         log
@@ -33,4 +45,5 @@ target_link_libraries(winlator
         EGL
         GLESv2
         GLESv3
+        linkernsbypass
 )
