@@ -195,17 +195,13 @@ public class DXVKConfigDialog extends ContentDialog {
     }
 
     public static void setEnvVars(Context context, KeyValueSet config, EnvVars envVars) {
-        envVars.put("DXVK_STATE_CACHE_PATH", context.getFilesDir() + "/imagefs/" + ImageFs.CACHE_PATH);
-
-        File rootDir = ImageFs.find(context).getRootDir();
-
-        String content = "\"";
+        String content = "";
 
         String framerate = config.get("framerate");
 
         if (!framerate.isEmpty() && !framerate.equals("0")) {
-            content += "dxgi.maxFrameRate = "+framerate+';';
-            content += "d3d9.maxFrameRate = "+framerate+';';
+            content += "dxgi.maxFrameRate = " + framerate + "; ";
+            content += "d3d9.maxFrameRate = " + framerate;
             envVars.put("DXVK_FRAME_RATE", framerate);
         }
 
@@ -217,11 +213,11 @@ public class DXVKConfigDialog extends ContentDialog {
         if (!asyncCache.isEmpty() && !asyncCache.equals("0"))
             envVars.put("DXVK_GPLASYNCCACHE", "1");
 
-        content = content + '\"';
+        if (!content.isEmpty())
+            envVars.put("DXVK_CONFIG", content);
 
-        envVars.put("DXVK_CONFIG_FILE", rootDir + ImageFs.CONFIG_PATH+"/dxvk.conf");
-        envVars.put("DXVK_CONFIG", content);
         envVars.put("VKD3D_FEATURE_LEVEL", config.get("vkd3dLevel"));
+        envVars.put("DXVK_STATE_CACHE_PATH", context.getFilesDir() + "/imagefs/" + ImageFs.CACHE_PATH);
     }
 
     private void loadDxvkVersionSpinner(ContentsManager manager, Spinner spinner, boolean isARM64EC) {
