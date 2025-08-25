@@ -55,7 +55,6 @@ public class Container {
     private String wineVersion = WineInfo.MAIN_WINE_VERSION.identifier();
     private boolean showFPS;
     private boolean fullscreenStretched;
-    private boolean wow64Mode = true;
     private byte startupSelection = STARTUP_SELECTION_ESSENTIAL;
     private String cpuList;
     private String cpuListWoW64;
@@ -210,14 +209,6 @@ public class Container {
 
     public void setShowFPS(boolean showFPS) {
         this.showFPS = showFPS;
-    }
-
-    public boolean isWoW64Mode() {
-        return wow64Mode;
-    }
-
-    public void setWoW64Mode(boolean wow64Mode) {
-        this.wow64Mode = wow64Mode;
     }
 
     public byte getStartupSelection() {
@@ -405,7 +396,6 @@ public class Container {
             data.put("relativeMouseMovement", isRelativeMouseMovement);
             data.put("fullscreenStretched", fullscreenStretched);
             data.put("inputType", inputType);
-            data.put("wow64Mode", wow64Mode);
             data.put("startupSelection", startupSelection);
             data.put("box64Version", box64Version);
             data.put("box64Preset", box64Preset);
@@ -478,9 +468,6 @@ public class Container {
                     break;
                 case "inputType" :
                     setInputType(data.getInt(key));
-                    break;
-                case "wow64Mode" :
-                    setWoW64Mode(data.getBoolean(key));
                     break;
                 case "startupSelection" :
                     setStartupSelection((byte)data.getInt(key));

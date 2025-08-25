@@ -413,9 +413,6 @@ public class ContainerDetailFragment extends Fragment {
             popupMenu.show();
         });
 
-        final CheckBox cbWoW64Mode = view.findViewById(R.id.CBWoW64Mode);
-        cbWoW64Mode.setChecked(!isEditMode() || container.isWoW64Mode());
-
         final CheckBox cbRelativeMouseMovement = view.findViewById(R.id.CBRelativeMouseMovement);
         cbRelativeMouseMovement.setChecked(isEditMode() && container.isRelativeMouseMovement());
 
@@ -499,7 +496,6 @@ public class ContainerDetailFragment extends Fragment {
                 boolean fullscreenStretched = cbFullscreenStretched.isChecked();
                 String cpuList = cpuListView.getCheckedCPUListAsString();
                 String cpuListWoW64 = cpuListViewWoW64.getCheckedCPUListAsString();
-                boolean wow64Mode = cbWoW64Mode.isChecked();
                 boolean isRelativeMouseMovement = cbRelativeMouseMovement.isChecked();
                 byte startupSelection = (byte) sStartupSelection.getSelectedItemPosition();
                 String box64Version = sBox64Version.getSelectedItem().toString();
@@ -553,7 +549,6 @@ public class ContainerDetailFragment extends Fragment {
                     container.setShowFPS(showFPS);
                     container.setFullscreenStretched(fullscreenStretched);
                     container.setInputType(finalInputType);
-                    container.setWoW64Mode(wow64Mode);
                     container.setRelativeMouseMovement(isRelativeMouseMovement);
                     container.setStartupSelection(startupSelection);
                     container.setBox64Version(box64Version);
@@ -588,7 +583,6 @@ public class ContainerDetailFragment extends Fragment {
                     data.put("relativeMouseMovement", isRelativeMouseMovement);
                     data.put("fullscreenStretched", fullscreenStretched);
                     data.put("inputType", finalInputType);
-                    data.put("wow64Mode", wow64Mode);
                     data.put("startupSelection", startupSelection);
                     data.put("box64Version", box64Version);
                     data.put("box64Preset", box64Preset);
@@ -987,7 +981,6 @@ public class ContainerDetailFragment extends Fragment {
         sWineVersion.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
-                CheckBox cbWoW64Mode = view.findViewById(R.id.CBWoW64Mode);
                 FrameLayout fexcoreFL = view.findViewById(R.id.fexcoreFrame);
                 Spinner sEmulator = view.findViewById(R.id.SEmulator);
                 Spinner sEmulator64 = view.findViewById(R.id.SEmulator64);
@@ -1010,7 +1003,6 @@ public class ContainerDetailFragment extends Fragment {
                 }
                 loadBox64VersionSpinner(context, container, contentsManager, sBox64Version, wineInfo.isArm64EC());
                 setupDXWrapperSpinner(sDXWrapper, vDXWrapperConfig, wineInfo.isArm64EC());
-                cbWoW64Mode.setEnabled(true); // Always allow user to toggle WoW64 mode
             }
             @Override
             public void onNothingSelected(AdapterView<?> parent) {

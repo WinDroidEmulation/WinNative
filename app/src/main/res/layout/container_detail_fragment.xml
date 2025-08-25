@@ -635,15 +635,6 @@
                             android:entries="@array/startup_selection_entries" />
 
                         <CheckBox
-                            android:id="@+id/CBWoW64Mode"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/enable_experimental_wow64_mode"
-                            android:checked="true"
-                            android:enabled="false"
-                            android:layout_marginTop="8dp" />
-
-                        <CheckBox
                             android:id="@+id/CBRelativeMouseMovement"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"

@@ -40,7 +40,6 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     private String box64Preset = Box64Preset.COMPATIBILITY;
     private Callback<Integer> terminationCallback;
     private static final Object lock = new Object();
-    private boolean wow64Mode = true;
     private final ContentsManager contentsManager;
     private final ContentProfile wineProfile;
     private Container container;
@@ -199,14 +198,6 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
     public void setGuestExecutable(String guestExecutable) {
         this.guestExecutable = guestExecutable;
-    }
-
-    public boolean isWoW64Mode() {
-        return wow64Mode;
-    }
-
-    public void setWoW64Mode(boolean wow64Mode) {
-        this.wow64Mode = wow64Mode;
     }
 
     public String[] getBindingPaths() {
