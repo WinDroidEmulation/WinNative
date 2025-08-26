@@ -39,8 +39,7 @@ public class EnvVarsView extends FrameLayout {
         {"MESA_GL_VERSION_OVERRIDE", "NUMBER"},
         {"PULSE_LATENCY_MSEC", "NUMBER"},
         {"WINE_DO_NOT_CREATE_DXGI_DEVICE_MANAGER", "CHECKBOX", "0", "1"},
-        {"WINE_NEW_MEDIASOURCE", "CHECKBOX", "0", "1"},
-        {"MANGOHUD", "CHECKBOX", "0", "1"}
+        {"WINE_NEW_MEDIASOURCE", "CHECKBOX", "0", "1"}
     };
     private final LinearLayout container;
     private final TextView emptyTextView;
