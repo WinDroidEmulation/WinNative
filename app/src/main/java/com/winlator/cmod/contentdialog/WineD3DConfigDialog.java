@@ -11,6 +11,7 @@ import com.winlator.cmod.core.AppUtils;
 import com.winlator.cmod.core.EnvVars;
 import com.winlator.cmod.core.FileUtils;
 import com.winlator.cmod.core.KeyValueSet;
+import com.winlator.cmod.core.StringUtils;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -34,6 +35,7 @@ public class WineD3DConfigDialog extends ContentDialog {
 
         final Spinner sCSMT = findViewById(R.id.SCSMT);
         final Spinner sGPUName = findViewById(R.id.SGPUName);
+        final Spinner sVideoMemorySize = findViewById(R.id.SVideoMemorySize);
         final Spinner sStrictShaderMath = findViewById(R.id.SStrictShaderMath);
         final Spinner sOffscreenRenderingMode = findViewById(R.id.SOffscreenRenderingMode);
         final Spinner sRenderer = findViewById(R.id.SRenderer);
@@ -59,12 +61,14 @@ public class WineD3DConfigDialog extends ContentDialog {
         AppUtils.setSpinnerSelectionFromValue(sOffscreenRenderingMode, config.get("OffscreenRenderingMode"));
         AppUtils.setSpinnerSelectionFromValue(sGPUName, config.get("gpuName"));
         AppUtils.setSpinnerSelectionFromValue(sRenderer, config.get("renderer"));
+        AppUtils.setSpinnerSelectionFromNumber(sVideoMemorySize, config.get("videoMemorySize"));
 
         setOnConfirmCallback(() -> {
             config.put("csmt", sCSMT.getSelectedItem().toString().equals("Enabled") ? "3": "0");
             config.put("strict_shader_math", sStrictShaderMath.getSelectedItem().toString().equals("Enabled") ? "1" : "0");
             config.put("OffscreenRenderingMode", sOffscreenRenderingMode.getSelectedItem().toString());
             config.put("gpuName", sGPUName.getSelectedItem().toString());
+            config.put("videoMemorySize", StringUtils.parseNumber(sVideoMemorySize.getSelectedItem().toString()));
             config.put("renderer", sRenderer.getSelectedItem().toString());
             anchor.setTag(config.toString());
         });
@@ -133,7 +137,7 @@ public class WineD3DConfigDialog extends ContentDialog {
     public static void setEnvVars(Context context, KeyValueSet config, EnvVars vars) {
         String deviceID = getDeviceIdFromGPUName(context, config.get("gpuName"));
         String vendorID = getVendorIdFromGPUName(context, config.get("vendorID"));
-        String wined3dConfig = "csmt=0x" + config.get("csmt") + ",strict_shader_math=" + config.get("strict_shader_math") + ",OffscreenRenderingMode=" + config.get("OffscreenRenderingMode") + ",VideoPciDeviceID=" + deviceID + ",VideoPciVendorID=" + vendorID + ",renderer=" + config.get("renderer");
+        String wined3dConfig = "csmt=0x" + config.get("csmt") + ",strict_shader_math=0x" + config.get("strict_shader_math") + ",OffscreenRenderingMode=" + config.get("OffscreenRenderingMode") + ",VideoMemorySize=" + config.get("videoMemorySize") + ",VideoPciDeviceID=" + deviceID + ",VideoPciVendorID=" + vendorID + ",renderer=" + config.get("renderer");
         vars.put("WINE_D3D_CONFIG", wined3dConfig);
     }
 }
