@@ -14,6 +14,7 @@ import android.hardware.SensorManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.telecom.Call;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -61,7 +62,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -99,6 +102,7 @@ public class SettingsFragment extends Fragment {
     private static final int REQUEST_CODE_WINLATOR_PATH = 1002;
     private static final int REQUEST_CODE_SHORTCUT_EXPORT_PATH = 1003;
     private static final int REQUEST_CODE_INSTALL_SOUNDFONT = 1001;
+    private static final int REQUEST_CODE_IMPORT_PRESET = 1004;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -597,12 +601,29 @@ public class SettingsFragment extends Fragment {
             });
         };
 
+        Callback<String> onExportPreset = (String prefix) -> {
+            final String presetId = Box64PresetManager.getSpinnerSelectedId(spinners.get(prefix));
+            if (!presetId.startsWith(Box64Preset.CUSTOM)) {
+                AppUtils.showToast(context, "Cannot export this preset");
+                return;
+            }
+            getActivity().runOnUiThread(() ->  {
+                Box64PresetManager.exportPreset(prefix, context, presetId);
+            });
+        };
+
+        Callback<String> onImportPreset = (String prefix) -> {
+          openFile(REQUEST_CODE_IMPORT_PRESET);
+        };
+
         updateSpinner.call("box64");
 
         view.findViewById(R.id.BTAddBox64Preset).setOnClickListener((v) -> onAddPreset.call("box64"));
         view.findViewById(R.id.BTEditBox64Preset).setOnClickListener((v) -> onEditPreset.call("box64"));
         view.findViewById(R.id.BTDuplicateBox64Preset).setOnClickListener((v) -> onDuplicatePreset.call("box64"));
         view.findViewById(R.id.BTRemoveBox64Preset).setOnClickListener((v) -> onRemovePreset.call("box64"));
+        view.findViewById(R.id.BTExportBox64Preset).setOnClickListener((v) -> onExportPreset.call("box64"));
+        view.findViewById(R.id.BTImportBox64Preset).setOnClickListener((v) -> onImportPreset.call("box64"));
     }
 
 
@@ -947,7 +968,16 @@ public class SettingsFragment extends Fragment {
                         }
                         break;
 
-                    // Add future cases here for other request codes...
+                    case REQUEST_CODE_IMPORT_PRESET:
+                        try {
+                            Spinner sBox64Preset = getView().findViewById(R.id.SBox64Preset);
+                            InputStream is = getActivity().getContentResolver().openInputStream(uri);
+                            Box64PresetManager.importPreset("box64", getContext(), is);
+                            Box64PresetManager.loadSpinner("box64", sBox64Preset, preferences.getString("box64_preset", Box64Preset.COMPATIBILITY));
+                        } catch (FileNotFoundException e) {
+                        }
+
+                        // Add future cases here for other request codes...
                     default:
                         break;
                 }

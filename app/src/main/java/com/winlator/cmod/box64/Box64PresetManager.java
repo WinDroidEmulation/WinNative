@@ -2,6 +2,8 @@ package com.winlator.cmod.box64;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.net.Uri;
+import android.util.Log;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
 import android.widget.SpinnerAdapter;
@@ -9,8 +11,20 @@ import android.widget.SpinnerAdapter;
 import androidx.preference.PreferenceManager;
 
 import com.winlator.cmod.R;
+import com.winlator.cmod.SettingsFragment;
+import com.winlator.cmod.core.AppUtils;
 import com.winlator.cmod.core.EnvVars;
+import com.winlator.cmod.core.FileUtils;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Locale;
@@ -201,6 +215,80 @@ public abstract class Box64PresetManager {
         }
 
         preferences.edit().putString(key, newCustomPresetsStr).apply();
+    }
+
+    public static void exportPreset(String prefix, Context context, String id) {
+        File presetFile = null;
+        String key = prefix + "_custom_presets";
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        String[] customPresets = preferences.getString(key, "").split(",");
+
+        for (int i = 0; i < customPresets.length; i++) {
+            String[] preset = customPresets[i].split("\\|");
+            if (preset[0].equals(id)) {;
+                String uriPath = preferences.getString("winlator_path_uri", null);
+                if (uriPath != null) {
+                    Uri uri = Uri.parse(uriPath);
+                    String path = FileUtils.getFilePathFromUri(context, uri);
+                    presetFile = new File(path, "Presets/" + preset[1] + ".wbp");
+                }
+                else {
+                    presetFile = new File(SettingsFragment.DEFAULT_WINLATOR_PATH, "Presets/" + preset[1] + ".wbp");
+                }
+                if (!presetFile.getParentFile().exists())
+                    presetFile.getParentFile().mkdirs();
+
+                try {
+                    FileOutputStream fos = new FileOutputStream(presetFile);
+                    PrintWriter pw = new PrintWriter(fos);
+                    pw.write("ID:" + preset[0] + "\n");
+                    pw.write("Name:" + preset[1] + "\n");
+                    pw.write("EnvVars:" + preset[2] + "\n");
+                    pw.close();
+                    fos.close();
+                } catch (IOException e) {
+                }
+                break;
+            }
+        }
+        if (presetFile != null && presetFile.exists())
+            AppUtils.showToast(context, "Preset " + presetFile.getName() + " exported successfully at " + presetFile.getParentFile().getPath());
+        else
+            AppUtils.showToast(context, "Failed to export preset");
+    }
+
+    public static void importPreset(String prefix, Context context, InputStream stream) {
+        String key = prefix + "_custom_presets";
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        String customPresetStr = preferences.getString(key, "");
+        ArrayList<String> lines = new ArrayList<>();
+
+        try {
+            String[] preset = new String[3];
+            BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                lines.add(line);
+            }
+            for (int i = 0; i < lines.size(); i++) {
+                String[] contents = lines.get(i).split(":");
+                switch (contents[0]) {
+                    case "ID":
+                        preset[0] = contents[1];
+                        break;
+                    case "Name":
+                        preset[1] = contents[1];
+                        break;
+                    case "EnvVars":
+                        preset[2] = contents[1];
+                        break;
+                }
+            }
+            customPresetStr = customPresetStr + (!customPresetStr.equals("") ? "," : "") + Box64Preset.CUSTOM+"-"+getNextPresetId(context, prefix) + "|" + preset[1] + "|" + preset[2];
+        } catch (IOException e) {
+        }
+
+        preferences.edit().putString(key, customPresetStr).apply();
     }
 
     public static void loadSpinner(String prefix, Spinner spinner, String selectedId) {
