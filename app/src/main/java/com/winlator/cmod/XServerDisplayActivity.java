@@ -1508,7 +1508,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         String vulkanVersion = graphicsDriverConfig.get("vulkanVersion");
-        String vulkanVersionPatch = GPUInformation.getVulkanVersion(adrenoToolsDriverId, this).split("\\.")[2];
+        String vulkanVersionPatch = GPUInformation.getVersion(adrenoToolsDriverId, this).split("\\.")[2];
         vulkanVersion = vulkanVersion + "." + vulkanVersionPatch;
         envVars.put("WRAPPER_VK_VERSION", vulkanVersion);
 

@@ -263,7 +263,7 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
         List<String> wrapperVersions = new ArrayList<>();
         String[] wrapperDefaultVersions = context.getResources().getStringArray(R.array.wrapper_graphics_driver_version_entries);
 
-        if (GPUInformation.getRenderer(null, null).contains("Adreno"))
+        if (GPUInformation.isAdrenoGPU(context))
             wrapperVersions.addAll(Arrays.asList(wrapperDefaultVersions));
         else
             wrapperVersions.add(wrapperDefaultVersions[0]);
@@ -271,11 +271,6 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
         // Add installed versions from AdrenotoolsManager
         AdrenotoolsManager adrenotoolsManager = new AdrenotoolsManager(context);
         wrapperVersions.addAll(adrenotoolsManager.enumarateInstalledDrivers());
-
-        for (int i = 0; i < wrapperVersions.size(); i++) {
-            if (!GPUInformation.isDriverSupported(wrapperVersions.get(i), context))
-                wrapperVersions.remove(i);
-        }
 
         // Set the adapter and select the initial version
         ArrayAdapter<String> wrapperAdapter = new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, wrapperVersions);
@@ -308,7 +303,7 @@ public class GraphicsDriverConfigDialog extends ContentDialog {
             }
         }
 
-        AppUtils.setSpinnerSelectionFromValue(spinner, GPUInformation.isDriverSupported(DefaultVersion.WRAPPER_ADRENO, getContext()) ? DefaultVersion.WRAPPER_ADRENO : DefaultVersion.WRAPPER);
+        AppUtils.setSpinnerSelectionFromValue(spinner, GPUInformation.isAdrenoGPU(getContext()) ? DefaultVersion.WRAPPER_ADRENO : DefaultVersion.WRAPPER);
     }
 
 }

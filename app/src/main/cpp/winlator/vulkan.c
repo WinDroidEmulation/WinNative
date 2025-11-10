@@ -154,26 +154,6 @@ static VkResult enumerate_physical_devices() {
     return result;
 }
 
-JNIEXPORT jboolean  JNICALL
-Java_com_winlator_cmod_core_GPUInformation_isDriverSupported(JNIEnv *env, jclass obj, jstring driverName, jobject context) {
-    VkResult result;
-    jboolean isSupported = false;
-
-    result = create_instance(driverName, env, context);
-
-    if (result == VK_SUCCESS) {
-        result = enumerate_physical_devices();
-        if (result == VK_SUCCESS && physicalDevice)
-            isSupported = true;
-        destroyInstance(instance, NULL);
-    }
-
-    if (vulkan_handle)
-        dlclose(vulkan_handle);
-
-    return isSupported;
-}
-
 JNIEXPORT jstring JNICALL
 Java_com_winlator_cmod_core_GPUInformation_getVersion(JNIEnv *env, jclass obj, jstring driverName, jobject context) {
     VkPhysicalDeviceProperties props = {};
@@ -201,35 +181,6 @@ Java_com_winlator_cmod_core_GPUInformation_getVersion(JNIEnv *env, jclass obj, j
         dlclose(vulkan_handle);
 
     return (*env)->NewStringUTF(env, driverVersion);
-}
-
-JNIEXPORT jstring JNICALL
-Java_com_winlator_cmod_core_GPUInformation_getVulkanVersion(JNIEnv *env, jclass obj, jstring driverName, jobject context) {
-    VkPhysicalDeviceProperties props = {};
-    char *vulkanVersion;
-
-    if  (create_instance(driverName, env, context) != VK_SUCCESS) {
-        printf("Failed to create instance");
-        return (*env)->NewStringUTF(env, "Unknown");
-    }
-
-    if (enumerate_physical_devices() != VK_SUCCESS) {
-        printf("Failed to query physical devices");
-        return (*env)->NewStringUTF(env, "Unknown");
-    }
-
-    getPhysicalDeviceProperties(physicalDevice, &props);
-    uint32_t vk_driver_major = VK_VERSION_MAJOR(props.apiVersion);
-    uint32_t vk_driver_minor = VK_VERSION_MINOR(props.apiVersion);
-    uint32_t vk_driver_patch = VK_VERSION_PATCH(props.apiVersion);
-    asprintf(&vulkanVersion, "%d.%d.%d", vk_driver_major, vk_driver_minor,vk_driver_patch);
-
-    destroyInstance(instance, NULL);
-
-    if (vulkan_handle)
-        dlclose(vulkan_handle);
-
-    return (*env)->NewStringUTF(env, vulkanVersion);
 }
 
 JNIEXPORT jstring JNICALL
