@@ -9,6 +9,15 @@ public abstract class GPUInformation {
     public static boolean isAdrenoGPU(Context context) {
         return getRenderer(null, context).toLowerCase().contains("adreno");
     }
+
+    public static boolean isTurnipSupported(String driverName, Context context) {
+        if (!isAdrenoGPU(context))
+            return false;
+
+        String renderer = getRenderer(driverName, context);
+
+        return !renderer.toLowerCase().contains("unknown");
+    }
     public native static String getVersion(String driverName, Context context);
     public native static String getRenderer(String driverName, Context context);
     public native static String[] enumerateExtensions(String driverName, Context context);
