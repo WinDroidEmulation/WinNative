@@ -1618,7 +1618,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 Log.d(TAG, "Extracting fallback DXVK .tzst archive: " + dxvkWrapper);
                 TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "dxwrapper/" + dxvkWrapper + ".tzst", windowsDir, onExtractFileListener);
 
-                if (compareVersion(dxvkWrapper, "2.4") < 0) {
+                if (compareVersion(extractDotVersion(dxvkWrapper), "2.4") < 0) {
                     Log.d(TAG, "Extracting d8vk as part of DXVK version " + dxvkWrapper);
                     TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "dxwrapper/d8vk-" + DefaultVersion.D8VK + ".tzst", windowsDir, onExtractFileListener);
                 }
@@ -1670,19 +1670,28 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return a[2] - b[2];
     }
 
-    private static final Pattern SEMVER_LOOSE = Pattern.compile("(\\d+)\\.(\\d+)(?:\\.(\\d+))?");
+    private static final Pattern SEMVER_LOOSE =
+            Pattern.compile("(\\d+)\\.(\\d+)(?:\\.(\\d+))?");
 
     private static int[] parseSemverLoose(String s) {
         if (s == null) return new int[]{0, 0, 0};
 
         Matcher m = SEMVER_LOOSE.matcher(s);
-        if (!m.find()) {
+
+        String g1 = null, g2 = null, g3 = null;
+        while (m.find()) {
+            g1 = m.group(1);
+            g2 = m.group(2);
+            g3 = m.group(3);
+        }
+
+        if (g1 == null || g2 == null) {
             return new int[]{0, 0, 0};
         }
 
-        int major = safeParseInt(m.group(1));
-        int minor = safeParseInt(m.group(2));
-        int patch = safeParseInt(m.group(3));
+        int major = safeParseInt(g1);
+        int minor = safeParseInt(g2);
+        int patch = safeParseInt(g3);
         return new int[]{major, minor, patch};
     }
 
@@ -1910,6 +1919,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
 
 }
+
 
 
 
