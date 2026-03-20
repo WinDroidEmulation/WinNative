@@ -1,14 +1,11 @@
 package com.winlator.cmod.inputcontrols;
 
 import android.content.Context;
-import android.content.SharedPreferences;
-import android.util.Log;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 
 import androidx.annotation.Nullable;
-import androidx.preference.PreferenceManager;
 
 import com.winlator.cmod.XServerDisplayActivity;
 
@@ -41,17 +38,8 @@ public class ExternalController {
     private byte triggerType = TRIGGER_IS_AXIS;
     private final ArrayList<ExternalControllerBinding> controllerBindings = new ArrayList<>();
     public final GamepadState state = new GamepadState();
+    public final GamepadState remappedState = new GamepadState();
     private XServerDisplayActivity activity;
-
-    private float deadzoneLeft = 0.1f; // Default deadzone (10%)
-    private float deadzoneRight = 0.1f; // Default deadzone (10%)
-    private float sensitivityLeft = 1.0f; // Default sensitivity (1x)
-    private float sensitivityRight = 1.0f; // Default sensitivity (1x)
-    private boolean invertLeftX = false;
-    private boolean invertLeftY = false;
-    private boolean invertRightX = false;
-    private boolean invertRightY = false;
-    private boolean useSquareDeadzoneLeft;
 
     public String getName() {
         return name;
@@ -77,128 +65,10 @@ public class ExternalController {
         triggerType = mode;
     }
 
-    private Context context; // Add this field
-
-    // In ExternalController.java
-
     public void setContext(Context context) {
-        this.context = context;
-        loadPreferences();
-
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        prefs.registerOnSharedPreferenceChangeListener(prefChangeListener);
     }
-
-    private SharedPreferences.OnSharedPreferenceChangeListener prefChangeListener = new SharedPreferences.OnSharedPreferenceChangeListener() {
-        @Override
-        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-            switch (key) {
-                case PreferenceKeys.DEADZONE_LEFT:
-                    deadzoneLeft = sharedPreferences.getInt(PreferenceKeys.DEADZONE_LEFT, 10) / 100.0f;
-                    Log.d("ExternalController", "Deadzone Left updated: " + deadzoneLeft);
-                    break;
-                case PreferenceKeys.DEADZONE_RIGHT:
-                    deadzoneRight = sharedPreferences.getInt(PreferenceKeys.DEADZONE_RIGHT, 10) / 100.0f;
-                    Log.d("ExternalController", "Deadzone Right updated: " + deadzoneRight);
-                    break;
-                case PreferenceKeys.SENSITIVITY_LEFT:
-                    sensitivityLeft = sharedPreferences.getInt(PreferenceKeys.SENSITIVITY_LEFT, 100) / 100.0f;
-                    Log.d("ExternalController", "Sensitivity Left updated: " + sensitivityLeft);
-                    break;
-                case PreferenceKeys.SENSITIVITY_RIGHT:
-                    sensitivityRight = sharedPreferences.getInt(PreferenceKeys.SENSITIVITY_RIGHT, 100) / 100.0f;
-                    Log.d("ExternalController", "Sensitivity Right updated: " + sensitivityRight);
-                    break;
-                case PreferenceKeys.INVERT_LEFT_X:
-                    invertLeftX = sharedPreferences.getBoolean(PreferenceKeys.INVERT_LEFT_X, false);
-                    Log.d("ExternalController", "Invert Left X updated: " + invertLeftX);
-                    break;
-                case PreferenceKeys.INVERT_LEFT_Y:
-                    invertLeftY = sharedPreferences.getBoolean(PreferenceKeys.INVERT_LEFT_Y, false);
-                    Log.d("ExternalController", "Invert Left Y updated: " + invertLeftY);
-                    break;
-                case PreferenceKeys.INVERT_RIGHT_X:
-                    invertRightX = sharedPreferences.getBoolean(PreferenceKeys.INVERT_RIGHT_X, false);
-                    Log.d("ExternalController", "Invert Right X updated: " + invertRightX);
-                    break;
-                case PreferenceKeys.INVERT_RIGHT_Y:
-                    invertRightY = sharedPreferences.getBoolean(PreferenceKeys.INVERT_RIGHT_Y, false);
-                    Log.d("ExternalController", "Invert Right Y updated: " + invertRightY);
-                    break;
-            }
-        }
-    };
 
     public void unregisterListener() {
-        if (context != null) {
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-            prefs.unregisterOnSharedPreferenceChangeListener(prefChangeListener);
-        }
-    }
-
-    private void loadPreferences() {
-        if (context == null) {
-            Log.e("ExternalController", "Context is null. Cannot load preferences.");
-            return;
-        }
-
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        SharedPreferences.Editor editor = prefs.edit();
-        boolean migrated = false;
-
-        // List of preferences to migrate from Integer to Float
-        String[] floatPreferences = {
-                PreferenceKeys.DEADZONE_LEFT,
-                PreferenceKeys.DEADZONE_RIGHT,
-                PreferenceKeys.SENSITIVITY_LEFT,
-                PreferenceKeys.SENSITIVITY_RIGHT
-        };
-
-        for (String key : floatPreferences) {
-            try {
-                // Attempt to retrieve as Integer
-                int intValue = prefs.getInt(key, -1);
-                if (intValue != -1) {
-                    // Convert to Float
-                    float floatValue = intValue / 100.0f; // Assuming original was a percentage
-                    editor.putFloat(key, floatValue);
-                    migrated = true;
-                    Log.d("ExternalController", "Migrated preference " + key + " from int to float.");
-                }
-            } catch (ClassCastException e) {
-                // Preference is already a Float, no action needed
-                Log.d("ExternalController", "Preference " + key + " is already a float.");
-            }
-        }
-
-        if (migrated) {
-            editor.apply(); // Apply migration changes
-        }
-
-        // Load preferences as Float
-        this.deadzoneLeft = prefs.getFloat(PreferenceKeys.DEADZONE_LEFT, 0.1f);
-        this.deadzoneRight = prefs.getFloat(PreferenceKeys.DEADZONE_RIGHT, 0.1f);
-        this.sensitivityLeft = prefs.getFloat(PreferenceKeys.SENSITIVITY_LEFT, 1.0f);
-        this.sensitivityRight = prefs.getFloat(PreferenceKeys.SENSITIVITY_RIGHT, 1.0f);
-
-        // Load inversion settings
-        this.invertLeftX = prefs.getBoolean(PreferenceKeys.INVERT_LEFT_X, false);
-        this.invertLeftY = prefs.getBoolean(PreferenceKeys.INVERT_LEFT_Y, false);
-        this.invertRightX = prefs.getBoolean(PreferenceKeys.INVERT_RIGHT_X, false);
-        this.invertRightY = prefs.getBoolean(PreferenceKeys.INVERT_RIGHT_Y, false);
-
-        // Load Square Deadzone Setting
-        this.useSquareDeadzoneLeft = prefs.getBoolean(PreferenceKeys.SQUARE_DEADZONE_LEFT, false);
-
-        Log.d("ExternalController", "Loaded preferences - Deadzone Left: " + deadzoneLeft +
-                ", Deadzone Right: " + deadzoneRight +
-                ", Sensitivity Left: " + sensitivityLeft +
-                ", Sensitivity Right: " + sensitivityRight +
-                ", Invert Left X: " + invertLeftX +
-                ", Invert Left Y: " + invertLeftY +
-                ", Invert Right X: " + invertRightX +
-                ", Invert Right Y: " + invertRightY +
-                ", Use Square Deadzone Left: " + useSquareDeadzoneLeft);
     }
 
     // Remove static keyword
@@ -277,33 +147,6 @@ public class ExternalController {
         return mappedButton;
     }
 
-    private void applyMappedButtonState(byte originalButton, boolean pressed) {
-        byte mappedButton = getMappedButton(originalButton);
-        if (mappedButton == IDX_BUTTON_L2) {
-            state.triggerL = pressed ? 1.0f : 0.0f;
-            state.setPressed(IDX_BUTTON_L2, pressed);
-        } else if (mappedButton == IDX_BUTTON_R2) {
-            state.triggerR = pressed ? 1.0f : 0.0f;
-            state.setPressed(IDX_BUTTON_R2, pressed);
-        } else {
-            state.setPressed(mappedButton, pressed);
-        }
-    }
-
-    private void applyAnalogTriggerState(byte originalButton, float value) {
-        byte mappedButton = getMappedButton(originalButton);
-        boolean pressed = value > 0.5f;
-        if (mappedButton == IDX_BUTTON_L2) {
-            state.triggerL = Math.max(state.triggerL, value);
-            state.setPressed(IDX_BUTTON_L2, state.triggerL > 0.5f);
-        } else if (mappedButton == IDX_BUTTON_R2) {
-            state.triggerR = Math.max(state.triggerR, value);
-            state.setPressed(IDX_BUTTON_R2, state.triggerR > 0.5f);
-        } else {
-            state.setPressed(mappedButton, pressed);
-        }
-    }
-
     public int getControllerBindingCount() {
         return controllerBindings.size();
     }
@@ -341,10 +184,6 @@ public class ExternalController {
         if (historyPos == -1) {
             float axisX = getCenteredAxis(event, MotionEvent.AXIS_HAT_X, historyPos);
             float axisY = getCenteredAxis(event, MotionEvent.AXIS_HAT_Y, historyPos);
-
-            if (axisX != 0 || axisY != 0) {
-                Log.d("ExternalController", "HAT Axis: x=" + axisX + " y=" + axisY);
-            }
 
             state.dpad[0] = axisY == -1.0f && Math.abs(state.thumbLY) < ControlElement.STICK_DEAD_ZONE;
             state.dpad[1] = axisX == 1.0f && Math.abs(state.thumbLX) < ControlElement.STICK_DEAD_ZONE;
@@ -532,9 +371,10 @@ public class ExternalController {
                 processTriggerButton(event);
             else if (triggerType == TRIGGER_IS_BUTTON && isXboxController())
                 processXboxTriggerButton(event);
-            int historySize = event.getHistorySize();
-            for (int i = 0; i < historySize; i++)
-                processJoystickInput(event, i);
+
+            // Use the current sample only for the live controller state.
+            // Replaying historical samples adds work on every motion batch and
+            // increases stick latency without improving the final state we send.
             processJoystickInput(event, -1);
             return true;
         }
@@ -545,21 +385,21 @@ public class ExternalController {
         boolean pressed = event.getAction() == KeyEvent.ACTION_DOWN;
         int keyCode = event.getKeyCode();
         int buttonIdx = getButtonIdxByKeyCode(keyCode);
-        Log.d("ExternalController", "KeyEvent: code=" + keyCode + " action=" + event.getAction() + " idx=" + buttonIdx);
         if (buttonIdx != -1) {
             if (buttonIdx == IDX_BUTTON_L2) {
                 if (triggerType == TRIGGER_IS_BUTTON) {
-                    applyMappedButtonState(IDX_BUTTON_L2, pressed);
+                    state.triggerL = pressed ? 1.0f : 0f;
+                    state.setPressed(buttonIdx, pressed);
                 } else
                     return true;
             } else if (buttonIdx == IDX_BUTTON_R2) {
                 if (triggerType == TRIGGER_IS_BUTTON) {
-                    applyMappedButtonState(IDX_BUTTON_R2, pressed);
+                    state.triggerR = pressed ? 1.0f : 0f;
+                    state.setPressed(buttonIdx, pressed);
                 } else
                     return true;
             } else {
-                applyMappedButtonState((byte) buttonIdx, pressed);
-                Log.d("ExternalController", "Button pressed: idx=" + buttonIdx + " " + pressed);
+                state.setPressed(buttonIdx, pressed);
             }
             return true;
         }
@@ -567,19 +407,15 @@ public class ExternalController {
         switch (keyCode) {
             case KeyEvent.KEYCODE_DPAD_UP:
                 state.dpad[0] = pressed && Math.abs(state.thumbLY) < ControlElement.STICK_DEAD_ZONE;
-                Log.d("ExternalController", "DPAD UP: " + state.dpad[0]);
                 return true;
             case KeyEvent.KEYCODE_DPAD_RIGHT:
                 state.dpad[1] = pressed && Math.abs(state.thumbLX) < ControlElement.STICK_DEAD_ZONE;
-                Log.d("ExternalController", "DPAD RIGHT: " + state.dpad[1]);
                 return true;
             case KeyEvent.KEYCODE_DPAD_DOWN:
                 state.dpad[2] = pressed && Math.abs(state.thumbLY) < ControlElement.STICK_DEAD_ZONE;
-                Log.d("ExternalController", "DPAD DOWN: " + state.dpad[2]);
                 return true;
             case KeyEvent.KEYCODE_DPAD_LEFT:
                 state.dpad[3] = pressed && Math.abs(state.thumbLX) < ControlElement.STICK_DEAD_ZONE;
-                Log.d("ExternalController", "DPAD LEFT: " + state.dpad[3]);
                 return true;
         }
         return false;
@@ -695,89 +531,13 @@ public class ExternalController {
         if (Math.abs(value) <= flat)
             return 0.0f;
 
-        if (axis == MotionEvent.AXIS_X || axis == MotionEvent.AXIS_Y) {
-            // Left Stick (Handle Square Deadzone if enabled)
-            float correctedValue = useSquareDeadzoneLeft
-                    ? applySquareDeadzone(
-                            event.getAxisValue(MotionEvent.AXIS_X),
-                            event.getAxisValue(MotionEvent.AXIS_Y),
-                            this.deadzoneLeft,
-                            this.sensitivityLeft,
-                            axis)
-                    : applyDeadzoneAndSensitivity(value, this.deadzoneLeft, this.sensitivityLeft);
-
-            // Apply inversion
-            if (axis == MotionEvent.AXIS_X && invertLeftX)
-                correctedValue = -correctedValue;
-            if (axis == MotionEvent.AXIS_Y && invertLeftY)
-                correctedValue = -correctedValue;
-
-            return correctedValue;
-        }
-
-        if (axis == MotionEvent.AXIS_Z || axis == MotionEvent.AXIS_RZ) {
-            // Right Stick (No Square Deadzone)
-            if (axis == MotionEvent.AXIS_RZ) {
-                value = -value;
+        if (axis == MotionEvent.AXIS_X || axis == MotionEvent.AXIS_Y || axis == MotionEvent.AXIS_Z || axis == MotionEvent.AXIS_RZ) {
+            if (Math.abs(value) >= ControlElement.STICK_DEAD_ZONE) {
+                return value;
             }
-            value = applyDeadzoneAndSensitivity(value, this.deadzoneRight, this.sensitivityRight);
-
-            // Apply inversion
-            if (axis == MotionEvent.AXIS_Z && invertRightX)
-                value = -value;
-            if (axis == MotionEvent.AXIS_RZ && invertRightY)
-                value = -value;
-
-            return value;
         }
 
         return 0.0f;
-    }
-
-    private float applySquareDeadzone(float x, float y, float deadzone, float sensitivity, int axis) {
-        final float PiOverFour = (float) (Math.PI / 4);
-
-        // Determine the angle from origin
-        double angle = Math.atan2(y, x) + Math.PI;
-
-        float scale;
-        if (angle <= PiOverFour || angle > 7 * PiOverFour) {
-            scale = (float) (1 / Math.cos(angle));
-        } else if (angle > PiOverFour && angle <= 3 * PiOverFour) {
-            scale = (float) (1 / Math.sin(angle));
-        } else if (angle > 3 * PiOverFour && angle <= 5 * PiOverFour) {
-            scale = (float) (-1 / Math.cos(angle));
-        } else if (angle > 5 * PiOverFour && angle <= 7 * PiOverFour) {
-            scale = (float) (-1 / Math.sin(angle));
-        } else {
-            throw new IllegalStateException("Invalid angle encountered.");
-        }
-
-        float scaledX = x * scale;
-        float scaledY = y * scale;
-
-        // Apply deadzone and sensitivity for the selected axis
-        float normalizedX = (Math.abs(scaledX) - deadzone) / (1.0f - deadzone);
-        float normalizedY = (Math.abs(scaledY) - deadzone) / (1.0f - deadzone);
-
-        if (axis == MotionEvent.AXIS_X) {
-            return Math.signum(x) * Math.min(Math.max(normalizedX, 0.0f), 1.0f) * sensitivity;
-        } else {
-            return Math.signum(y) * Math.min(Math.max(normalizedY, 0.0f), 1.0f) * sensitivity;
-        }
-    }
-
-    private float applyDeadzoneAndSensitivity(float value, float deadzone, float sensitivity) {
-        if (Math.abs(value) < deadzone) {
-            return 0.0f;
-        } else {
-            // Normalize the value after deadzone
-            float normalized = (Math.abs(value) - deadzone) / (1.0f - deadzone);
-            // Preserve the sign
-            normalized = Math.signum(value) * normalized;
-            // Apply sensitivity
-            return normalized * sensitivity;
-        }
     }
 
     public static boolean isJoystickDevice(MotionEvent event) {

@@ -445,6 +445,17 @@ public class XServerDisplayActivity extends AppCompatActivity {
         });
 
         imageFs = ImageFs.find(this);
+        GuestProgramLauncherComponent.ensureImageFsNativeLibrary(this, imageFs, "libfakeinput.so");
+        File devInputDir = new File(imageFs.getRootDir(), "dev/input");
+        if (devInputDir.exists() || devInputDir.mkdirs()) {
+            for (int i = 0; i < 4; i++) {
+                File eventFile = new File(devInputDir, "event" + i);
+                if (eventFile.exists()) {
+                    eventFile.delete();
+                }
+            }
+        }
+        winHandler.setFakeInputPath(devInputDir.getAbsolutePath());
 
         String screenSize = Container.DEFAULT_SCREEN_SIZE;
         containerManager = new ContainerManager(this);
@@ -553,6 +564,22 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
         if (shortcutPath != null && !shortcutPath.isEmpty()) {
             shortcut = new Shortcut(container, new File(shortcutPath));
+        }
+
+        int numControllers = 1;
+        if (shortcut != null) {
+            try {
+                numControllers = Integer.parseInt(shortcut.getExtra("numControllers", "1"));
+            } catch (NumberFormatException e) {
+                numControllers = 1;
+            }
+        }
+        numControllers = Math.max(1, Math.min(numControllers, 4));
+        for (int i = 0; i < numControllers; i++) {
+            try {
+                new File(devInputDir, "event" + i).createNewFile();
+            } catch (Exception e) {
+            }
         }
 
         taskAffinityMask = (short) ProcessHelper.getAffinityMask(container.getCPUList(true));
@@ -808,21 +835,16 @@ public class XServerDisplayActivity extends AppCompatActivity {
            
             @Override
             public void onMapWindow(Window window) {
-                // Log the class name of the mapped window
-                Log.d("XServerDisplayActivity", "onMapWindow: Mapping window: " + window.getClassName());
                 assignTaskAffinity(window);
             }
 
             @Override
             public void onModifyWindowProperty(Window window, Property property) {
-                String name = (property != null) ? property.nameAsString() : "";
-                Log.d("XServerDisplayActivity", "onModifyWindowProperty: Changed property " + name + " for window " + window.id);
                 changeFrameRatingVisibility(window, property);
             }    
 
             @Override
             public void onDestroyWindow(Window window) {
-                Log.d("XServerDisplayActivity", "onDestroyWindow: Destroying window " + window.getClassName());
                 changeFrameRatingVisibility(window, null);
             }
         });
@@ -1560,26 +1582,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
             extractWinComponentFiles();
             container.putExtra("wincomponents", wincomponents);
             containerDataChanged = true;
-        }
-
-        // ARM64EC: deploy custom xinput DLLs that read directly from shared memory.
-        // Proton's winebus doesn't pass SDL virtual joystick AXES to builtin xinput
-        // (only buttons/d-pad work through that path), so xinput_virtual.dll is required.
-        if (wineInfo != null && wineInfo.isArm64EC()) {
-            File windowsDir = new File(imageFs.getRootDir(), ImageFs.WINEPREFIX+"/drive_c/windows");
-            if (!container.getExtra("xinput_virtual_deployed", "").equals("10") || firstTimeBoot) {
-                TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "wincomponents/xinput_virtual_arm64ec.tzst", windowsDir);
-                File userRegFile = new File(imageFs.getRootDir(), ImageFs.WINEPREFIX+"/user.reg");
-                try (WineRegistryEditor registryEditor = new WineRegistryEditor(userRegFile)) {
-                    String[] xinputLibs = {"xinput1_1", "xinput1_2", "xinput1_3", "xinput1_4", "xinput9_1_0", "xinputuap"};
-                    for (String name : xinputLibs) {
-                        registryEditor.setStringValue("Software\\Wine\\DllOverrides", name, "native,builtin");
-                    }
-                }
-                container.putExtra("xinput_virtual_deployed", "10");
-                containerDataChanged = true;
-                Log.d("XServerDisplayActivity", "Deployed xinput_virtual DLLs (native,builtin) for ARM64EC");
-            }
         }
 
         // Ensure Steam client files are present (download + extract if needed) for Steam games
@@ -2546,7 +2548,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        Log.d("XServerDA", "dispatchGenericMotionEvent source=0x" + Integer.toHexString(event.getSource()) + " deviceId=" + event.getDeviceId() + " action=" + event.getAction());
         boolean handledByWinHandler = false;
         boolean handledByTouchpadView = false;
 
@@ -2581,8 +2582,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        Log.d("XServerDA", "dispatchKeyEvent keyCode=" + event.getKeyCode() + " deviceId=" + event.getDeviceId() + " source=0x" + Integer.toHexString(event.getSource()) + " action=" + event.getAction());
-
         // Handle the PlayStation or Xbox Home button to open the drawer
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_MODE || event.getKeyCode() == KeyEvent.KEYCODE_HOME || event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_SELECT) {

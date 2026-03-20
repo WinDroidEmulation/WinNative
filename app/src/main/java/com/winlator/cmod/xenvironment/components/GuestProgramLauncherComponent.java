@@ -61,6 +61,41 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     private File workingDir;
     private String steamType = Container.STEAM_TYPE_NORMAL;
 
+    public static File ensureImageFsNativeLibrary(Context context, ImageFs imageFs, String libraryName) {
+        File destFile = new File(imageFs.getLibDir(), libraryName);
+        String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
+        File sourceFile = new File(nativeLibDir, libraryName);
+
+        if (sourceFile.exists() && (!destFile.exists() || destFile.length() != sourceFile.length())) {
+            try {
+                FileUtils.copy(sourceFile, destFile);
+            } catch (Exception e) {
+                Log.e("GuestLauncher", "Failed to copy " + libraryName, e);
+            }
+        } else if (!destFile.exists()) {
+            try (java.util.zip.ZipFile apk = new java.util.zip.ZipFile(context.getApplicationInfo().sourceDir)) {
+                String abi = android.os.Build.SUPPORTED_ABIS[0];
+                String entryName = "lib/" + abi + "/" + libraryName;
+                java.util.zip.ZipEntry entry = apk.getEntry(entryName);
+                if (entry != null) {
+                    try (InputStream is = apk.getInputStream(entry);
+                         java.io.FileOutputStream fos = new java.io.FileOutputStream(destFile)) {
+                        byte[] buf = new byte[8192];
+                        int len;
+                        while ((len = is.read(buf)) != -1) {
+                            fos.write(buf, 0, len);
+                        }
+                    }
+                    destFile.setExecutable(true, false);
+                }
+            } catch (Exception e) {
+                Log.e("GuestLauncher", "Failed to extract " + libraryName, e);
+            }
+        }
+
+        return destFile.exists() ? destFile : null;
+    }
+
     public void setWorkingDir(File workingDir) {
         this.workingDir = workingDir;
     }
@@ -134,7 +169,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
             envVars.put("LD_PRELOAD", ldPreload.toString());
         }
         envVars.put("WINEESYNC_WINLATOR", "1");
-        if (this.envVars != null) envVars.putAll(this.envVars);
+        mergeExternalEnvVars(envVars, envVars.get("LD_PRELOAD"), envVars.get("FAKE_EVDEV_DIR"));
 
         String finalCommand = rootDir.getPath() + "/usr/local/bin/box64 " + command;
         try {
@@ -404,6 +439,48 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
     public void setFEXCorePreset (String fexcorePreset) { this.fexcorePreset = fexcorePreset; }
 
+    private static String mergePreloadValue(String baseValue, String overrideValue) {
+        if (overrideValue == null || overrideValue.isEmpty()) {
+            return baseValue == null ? "" : baseValue;
+        }
+        if (baseValue == null || baseValue.isEmpty()) {
+            return overrideValue;
+        }
+        if (overrideValue.equals(baseValue)) {
+            return baseValue;
+        }
+        return baseValue + ":" + overrideValue;
+    }
+
+    private void mergeExternalEnvVars(EnvVars envVars, String protectedLdPreload, String protectedFakeEvdevDir) {
+        if (this.envVars == null) {
+            return;
+        }
+
+        if (this.envVars.has("MANGOHUD")) {
+            this.envVars.remove("MANGOHUD");
+        }
+
+        if (this.envVars.has("MANGOHUD_CONFIG")) {
+            this.envVars.remove("MANGOHUD_CONFIG");
+        }
+
+        String overrideLdPreload = this.envVars.get("LD_PRELOAD");
+        String overrideFakeEvdevDir = this.envVars.get("FAKE_EVDEV_DIR");
+
+        envVars.putAll(this.envVars);
+
+        if (protectedLdPreload != null && !protectedLdPreload.isEmpty()) {
+            envVars.put("LD_PRELOAD", mergePreloadValue(protectedLdPreload, overrideLdPreload));
+        }
+
+        if (protectedFakeEvdevDir != null && !protectedFakeEvdevDir.isEmpty()) {
+            envVars.put("FAKE_EVDEV_DIR", protectedFakeEvdevDir);
+        } else if (overrideFakeEvdevDir != null && !overrideFakeEvdevDir.isEmpty()) {
+            envVars.put("FAKE_EVDEV_DIR", overrideFakeEvdevDir);
+        }
+    }
+
 
 
     private int execGuestProgram() {
@@ -424,7 +501,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         }
 
         EnvVars envVars = new EnvVars();
-        boolean enableEvshim = true;
+        boolean enableEvshim = false;
 
         if (enableEvshim) {
             // --- Controller support: create shared memory files for all 4 slots ---
@@ -469,7 +546,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         envVars.put("USER", ImageFs.USER);
         envVars.put("TMPDIR", rootDir.getPath() + "/usr/tmp");
         envVars.put("XDG_DATA_DIRS", rootDir.getPath() + "/usr/share");
-        envVars.put("LD_LIBRARY_PATH", rootDir.getPath() + "/usr/lib" + ":" + "/system/lib64" + (wineInfo.isArm64EC() ? ":" + context.getApplicationInfo().nativeLibraryDir : ""));
+        envVars.put("LD_LIBRARY_PATH", rootDir.getPath() + "/usr/lib" + ":" + "/system/lib64");
         envVars.put("XDG_CONFIG_DIRS", rootDir.getPath() + "/usr/etc/xdg");
         envVars.put("GST_PLUGIN_PATH", rootDir.getPath() + "/usr/lib/gstreamer-1.0");
         envVars.put("FONTCONFIG_PATH", rootDir.getPath() + "/usr/etc/fonts");
@@ -501,16 +578,6 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         envVars.put("PATH", winePath + ":" +
                 rootDir.getPath() + "/usr/bin");
 
-        // Arm64EC prefixes are 64-bit and must not be paired with the 32-bit wineserver.
-        boolean prefer64BitWine = true;
-        String wineLoader = resolveWineBinary(winePath, prefer64BitWine);
-        String wineServer = resolveWineServerBinary(winePath, prefer64BitWine);
-        envVars.put("WINELOADER", wineLoader);
-        if (wineServer != null) {
-            envVars.put("WINESERVER", wineServer);
-        }
-
- 
         envVars.put("ANDROID_SYSVSHM_SERVER", rootDir.getPath() + UnixSocketConfig.SYSVSHM_SERVER_PATH);
 
         String primaryDNS = "8.8.4.4";
@@ -528,6 +595,26 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         if ((new File(imageFs.getLibDir(), "libandroid-sysvshm.so")).exists()){
             ld_preload = imageFs.getLibDir() + "/libandroid-sysvshm.so";
         }
+
+        File fakeinputDest = ensureImageFsNativeLibrary(context, imageFs, "libfakeinput.so");
+
+        if (fakeinputDest != null && fakeinputDest.exists()) {
+            if (!ld_preload.isEmpty()) {
+                ld_preload += ":";
+            }
+            ld_preload += fakeinputDest.getAbsolutePath();
+        }
+
+        File devInputDir = new File(imageFs.getRootDir(), "dev/input");
+        devInputDir.mkdirs();
+        File event0 = new File(devInputDir, "event0");
+        if (!event0.exists()) {
+            try {
+                event0.createNewFile();
+            } catch (Exception e) {
+            }
+        }
+        envVars.put("FAKE_EVDEV_DIR", devInputDir.getAbsolutePath());
 
         if (enableEvshim) {
             // Create libSDL symlink if necessary for evshim to intercept correctly
@@ -596,18 +683,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
         envVars.put("LD_PRELOAD", ld_preload);
 
-        if (this.envVars.has("MANGOHUD")) {
-            this.envVars.remove("MANGOHUD");
-        }
-
-        if (this.envVars.has("MANGOHUD_CONFIG")) {
-            this.envVars.remove("MANGOHUD_CONFIG");
-        }
-        
-        // Merge any additional environment variables from external sources
-        if (this.envVars != null) {
-            envVars.putAll(this.envVars);
-        }
+        mergeExternalEnvVars(envVars, ld_preload, devInputDir.getAbsolutePath());
 
         String emulator = container.getEmulator();
         String emulator64 = container.getEmulator64();
@@ -673,20 +749,16 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
             for (String part : parts)
                 command += part + " ";
             command = command.trim();
-        }
-        String pinnedGuestExecutable = pinWineLoader(guestExecutable, wineLoader);
-
-        if (wineInfo.isArm64EC()) {
-            // HODLL is mandatory for Arm64EC Wine to translate x86/x64 guest code.
-            // We set both libwow64fex.dll (32-bit) and libarm64ecfex.dll (64-bit)
-            // to support mixed architecture process trees (e.g. 32-bit launcher -> 64-bit game).
-            envVars.put("HODLL", "libwow64fex.dll:libarm64ecfex.dll");
-
-            command = pinnedGuestExecutable;
         } else {
-            // x86_64 containers use Box64 binary translation directly.
-            // Pin the selected Wine loader/server so we do not accidentally resolve a mismatched wineserver.
-            command = imageFs.getBinDir() + "/box64 " + pinnedGuestExecutable;
+            if (wineInfo.isArm64EC()) {
+                command = winePath + "/" + guestExecutable;
+                if ("fexcore".equalsIgnoreCase(selectedEmulator))
+                    envVars.put("HODLL", "libwow64fex.dll");
+                else
+                    envVars.put("HODLL", "wowbox64.dll");
+            } else {
+                command = imageFs.getBinDir() + "/box64 " + guestExecutable;
+            }
         }
 
         // **Maybe remove this: Set execute permissions for box64 if necessary (Glibc/Proot artifact)

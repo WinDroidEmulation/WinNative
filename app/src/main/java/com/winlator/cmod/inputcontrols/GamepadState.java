@@ -84,6 +84,8 @@ public class GamepadState {
             return dpad[2];
         if (buttonCode == BUTTON_DPAD_LEFT)
             return dpad[3];
+        if (buttonCode == BUTTON_GUIDE)
+            return false;
 
         return isPressed(buttonCode);
     }

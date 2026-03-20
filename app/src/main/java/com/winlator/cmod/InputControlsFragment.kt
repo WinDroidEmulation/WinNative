@@ -276,10 +276,6 @@ class InputControlsFragment(private val selectedProfileId: Int) : Fragment() {
         rows += ControlRow.SectionHeader(R.string.trigger_type)
         rows += ControlRow.TriggerType(triggerTypeExpanded)
 
-        // Analog Sticks
-        rows += ControlRow.SectionHeader(R.string.configure_analog_sticks)
-        rows += ControlRow.AnalogSticksCard(analogSticksExpanded)
-
         // Import / Export
         rows += ControlRow.SectionHeader(R.string.profile)
         rows += ControlRow.ActionCard(

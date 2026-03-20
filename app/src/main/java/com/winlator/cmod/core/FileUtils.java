@@ -32,8 +32,10 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Stack;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 
 
@@ -41,6 +43,8 @@ import java.util.concurrent.Executors;
 public abstract class FileUtils {
 
     private static final String TAG = "FileUtils";
+    private static final int URI_PATH_CACHE_LIMIT = 256;
+    private static final Map<String, String> URI_PATH_CACHE = new ConcurrentHashMap<>();
 
     public static byte[] read(Context context, String assetFile) {
         try (InputStream inStream = context.getAssets().open(assetFile)) {
@@ -367,8 +371,6 @@ public abstract class FileUtils {
     }
 
     public static String getFilePathFromUriUsingSAF(Context context, Uri uri) {
-        Log.d(TAG, "getFilePathFromUriUsingSAF called with URI: " + uri.toString());
-
         String documentId;
         try {
             documentId = DocumentsContract.getTreeDocumentId(uri);
@@ -377,7 +379,6 @@ public abstract class FileUtils {
             return null;
         }
 
-        Log.d(TAG, "Document ID: " + documentId);
         String[] split = documentId.split(":");
         String type = split[0];
         String path = split.length > 1 ? split[1] : "";
@@ -398,7 +399,14 @@ public abstract class FileUtils {
 
 
     public static String getFilePathFromUri(Context context, Uri uri) {
-        Log.d(TAG, "getFilePathFromUri called with URI: " + uri.toString());
+        if (uri == null) return null;
+
+        String cacheKey = uri.toString();
+        String cachedPath = URI_PATH_CACHE.get(cacheKey);
+        if (cachedPath != null) {
+            return cachedPath;
+        }
+
         String filePath = null;
 
         try {
@@ -428,7 +436,13 @@ public abstract class FileUtils {
             filePath = uri.getPath();
         }
 
-        Log.d(TAG, "File path obtained: " + filePath);
+        if (filePath != null) {
+            if (URI_PATH_CACHE.size() >= URI_PATH_CACHE_LIMIT) {
+                URI_PATH_CACHE.clear();
+            }
+            URI_PATH_CACHE.put(cacheKey, filePath);
+        }
+
         return filePath;
     }
 

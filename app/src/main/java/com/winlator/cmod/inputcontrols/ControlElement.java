@@ -25,7 +25,7 @@ import java.util.Arrays;
 public class ControlElement {
     public static final float STICK_DEAD_ZONE = 0.15f;
     public static final float DPAD_DEAD_ZONE = 0.3f;
-    public static final float STICK_SENSITIVITY = 3.0f;
+    public static final float STICK_SENSITIVITY = 2.0f;
     public static final float TRACKPAD_MIN_SPEED = 0.8f;
     public static final float TRACKPAD_MAX_SPEED = 20.0f;
     public static final byte TRACKPAD_ACCELERATION_THRESHOLD = 4;
@@ -656,17 +656,32 @@ public class ControlElement {
                 if (currentPosition == null) currentPosition = new PointF();
                 currentPosition.x = boundingBox.left + deltaX * radius + radius;
                 currentPosition.y = boundingBox.top + deltaY * radius + radius;
-                final boolean[] states = {deltaY <= -STICK_DEAD_ZONE, deltaX >= STICK_DEAD_ZONE, deltaY >= STICK_DEAD_ZONE, deltaX <= -STICK_DEAD_ZONE};
+                Binding firstBinding = getBindingAt(0);
+                if (firstBinding.isGamepad()) {
+                    float magnitude = (float)Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                    float finalX = 0;
+                    float finalY = 0;
 
-                for (byte i = 0; i < 4; i++) {
-                    float value = i == 1 || i == 3 ? deltaX : deltaY;
-                    Binding binding = getBindingAt(i);
-                    if (binding.isGamepad()) {
-                        value = Mathf.clamp(Math.max(0, Math.abs(value) - 0.01f) * Mathf.sign(value) * STICK_SENSITIVITY, -1, 1);
-                        inputControlsView.handleInputEvent(binding, true, value);
+                    if (magnitude > STICK_DEAD_ZONE) {
+                        float normalizedX = deltaX / magnitude;
+                        float normalizedY = deltaY / magnitude;
+                        float scaledMagnitude = Math.max(0, magnitude - 0.01f) * STICK_SENSITIVITY;
+                        scaledMagnitude = Math.min(scaledMagnitude, 1.0f);
+                        finalX = normalizedX * scaledMagnitude;
+                        finalY = normalizedY * scaledMagnitude;
+                    }
+
+                    inputControlsView.handleStickInput(firstBinding, finalX, finalY);
+                    for (byte i = 0; i < 4; i++) {
                         this.states[i] = true;
                     }
-                    else {
+                }
+                else {
+                    final boolean[] states = {deltaY <= -STICK_DEAD_ZONE, deltaX >= STICK_DEAD_ZONE, deltaY >= STICK_DEAD_ZONE, deltaX <= -STICK_DEAD_ZONE};
+
+                    for (byte i = 0; i < 4; i++) {
+                        float value = i == 1 || i == 3 ? deltaX : deltaY;
+                        Binding binding = getBindingAt(i);
                         boolean state = binding.isMouseMove() ? (states[i] || states[(i+2)%4]) : states[i];
                         inputControlsView.handleInputEvent(binding, state, value);
                         this.states[i] = state;
@@ -786,7 +801,6 @@ public class ControlElement {
             currentPosition = new PointF();
         }
         currentPosition.set(x, y);
-        // Optionally invalidate the view to trigger a redraw
         inputControlsView.invalidate();
     }
 }

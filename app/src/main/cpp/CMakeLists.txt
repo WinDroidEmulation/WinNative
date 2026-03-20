@@ -38,6 +38,13 @@ target_link_libraries(winlator
         adrenotools
 )
 
+# Fake evdev input shim used by the pb_controller_fix controller path.
+add_library(fakeinput SHARED
+        winlator/fakeinput.cpp
+)
+target_compile_options(fakeinput PRIVATE -Wall -Wextra -fvisibility=hidden)
+target_link_libraries(fakeinput log dl)
+
 # Evshim - controller support shim (loaded via LD_PRELOAD, uses dlopen for SDL2)
 add_library(evshim SHARED
         winlator/evshim.c
