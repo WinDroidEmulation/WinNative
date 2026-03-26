@@ -60,6 +60,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     private final Shortcut shortcut;
     private File workingDir;
     private String steamType = Container.STEAM_TYPE_NORMAL;
+    private Runnable preUnpackCallback;
 
     public static File ensureImageFsNativeLibrary(Context context, ImageFs imageFs, String libraryName) {
         File destFile = new File(imageFs.getLibDir(), libraryName);
@@ -185,7 +186,12 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         envVars.put("WINEESYNC_WINLATOR", "1");
         mergeExternalEnvVars(envVars, envVars.get("LD_PRELOAD"), envVars.get("FAKE_EVDEV_DIR"));
 
-        String finalCommand = rootDir.getPath() + "/usr/local/bin/box64 " + command;
+        // box64 may be at /usr/bin or /usr/local/bin depending on installation
+        String box64Path = rootDir.getPath() + "/usr/bin/box64";
+        if (!new File(box64Path).exists()) {
+            box64Path = rootDir.getPath() + "/usr/local/bin/box64";
+        }
+        String finalCommand = box64Path + " " + command;
         try {
             Log.d("GuestProgramLauncherComponent", "Shell command is " + finalCommand);
             java.lang.Process process = Runtime.getRuntime().exec(
@@ -348,6 +354,18 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
                 extractBox64Files();
             copyDefaultBox64RCFile();
             checkDependencies();
+
+            // Run Steamless DRM stripping if configured (must happen after box64 is ready
+            // but before the game exe is launched)
+            if (preUnpackCallback != null) {
+                try {
+                    Log.d("GuestProgramLauncherComponent", "Running preUnpack callback (Steamless DRM stripping)");
+                    preUnpackCallback.run();
+                } catch (Exception e) {
+                    Log.e("GuestProgramLauncherComponent", "preUnpack callback failed", e);
+                }
+            }
+
             pid = execGuestProgram();
         }
     }
@@ -417,6 +435,10 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
     public void setTerminationCallback(Callback<Integer> terminationCallback) {
         this.terminationCallback = terminationCallback;
+    }
+
+    public void setPreUnpack(Runnable callback) {
+        this.preUnpackCallback = callback;
     }
 
     public String getGuestExecutable() {

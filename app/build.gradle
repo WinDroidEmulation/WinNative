@@ -75,7 +75,10 @@ android {
                 props.load(new FileInputStream(propsFile))
             }
 
-            storeFile rootProject.file(System.getenv("KEYSTORE_FILE") ?: props.getProperty("storeFile", ""))
+            def ksFile = System.getenv("KEYSTORE_FILE") ?: props.getProperty("storeFile", "")
+            if (ksFile != null && !ksFile.isEmpty()) {
+                storeFile rootProject.file(ksFile)
+            }
             storePassword System.getenv("KEYSTORE_PASSWORD") ?: props.getProperty("storePassword", "")
             keyAlias System.getenv("KEY_ALIAS") ?: props.getProperty("keyAlias", "")
             keyPassword System.getenv("KEY_PASSWORD") ?: props.getProperty("keyPassword", "")
@@ -85,11 +88,25 @@ android {
     buildTypes {
         debug {
             minifyEnabled false
-            signingConfig signingConfigs.release
+            // Use release signing if available, otherwise fall back to default debug signing
+            signingConfig signingConfigs.release.storeFile != null ? signingConfigs.release : signingConfigs.debug
         }
         release {
             minifyEnabled true
             signingConfig signingConfigs.release
+        }
+    }
+
+    flavorDimensions "branding"
+
+    productFlavors {
+        standard {
+            dimension "branding"
+            applicationId "com.winnative.cmod"
+        }
+        ludashi {
+            dimension "branding"
+            applicationId "com.ludashi.benchmark"
         }
     }
 
@@ -123,6 +140,26 @@ android {
                     'src/main/res'
             ]
         }
+    }
+
+    applicationVariants.configureEach { variant ->
+        if (variant.buildType.name == "debug") {
+            variant.outputs.configureEach { output ->
+                output.outputFileName = variant.flavorName == "ludashi" ? "ludashi.apk" : "standard.apk"
+            }
+        }
+    }
+
+}
+
+tasks.register("cleanLegacyDebugApk", Delete) {
+    delete(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
+    delete(layout.buildDirectory.file("outputs/apk/debug/output-metadata.json"))
+}
+
+tasks.configureEach {
+    if (name == "assembleDebug") {
+        finalizedBy(tasks.named("cleanLegacyDebugApk"))
     }
 }
 

@@ -80,6 +80,7 @@ public class Container {
     private boolean steamOfflineMode = false;
     private boolean unpackFiles = true;
 
+
     public static final String STEAM_TYPE_NORMAL = "normal";
     public static final String STEAM_TYPE_LIGHT = "light";
     public static final String STEAM_TYPE_ULTRALIGHT = "ultralight";
@@ -105,7 +106,13 @@ public class Container {
     }
 
     public void setExecutablePath(String executablePath) {
-        this.executablePath = executablePath != null ? executablePath : "";
+        String newPath = executablePath != null ? executablePath : "";
+        // If the executable path changed from a non-empty value, mark as needing unpacking
+        // so Steamless DRM stripping will re-run on the new exe (matches GameNative)
+        if (!this.executablePath.isEmpty() && !this.executablePath.equals(newPath)) {
+            this.needsUnpacking = true;
+        }
+        this.executablePath = newPath;
     }
 
     public String getExecArgs() {
@@ -444,6 +451,7 @@ public class Container {
             data.put("forceDlc", forceDlc);
             data.put("steamOfflineMode", steamOfflineMode);
             data.put("unpackFiles", unpackFiles);
+
             if (!WineInfo.isMainWineVersion(wineVersion)) data.put("wineVersion", wineVersion);
             FileUtils.writeString(getConfigFile(), data.toString());
         }
@@ -573,6 +581,9 @@ public class Container {
                     break;
                 case "unpackFiles":
                     setUnpackFiles(data.getBoolean(key));
+                    break;
+                case "moveSteamExe":
+                    // Legacy: always-on now, ignore saved value
                     break;
             }
         }
@@ -736,6 +747,14 @@ public class Container {
 
     public void setUnpackFiles(boolean unpackFiles) {
         this.unpackFiles = unpackFiles;
+    }
+
+    public boolean isMoveSteamExe() {
+        return true; // Always-on: Steam files are always copied to game directory
+    }
+
+    public void setMoveSteamExe(boolean moveSteamExe) {
+        // No-op: always-on now
     }
 
 }

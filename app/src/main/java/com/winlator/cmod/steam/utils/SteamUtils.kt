@@ -49,6 +49,7 @@ object SteamUtils {
         val gameName = getAppDirName(getAppInfoOf(steamAppId))
         val executablePath = container.executablePath.replace("/", "\\")
         val exePath = "steamapps\\common\\$gameName\\$executablePath"
+        val exeRunDir = "steamapps\\common\\$gameName"
         val exeCommandLine = container.execArgs
         val iniFile = File(container.getRootDir(), ".wine/drive_c/Program Files (x86)/Steam/ColdClientLoader.ini")
         iniFile.parentFile?.mkdirs()
@@ -71,7 +72,7 @@ object SteamUtils {
                 [SteamClient]
 
                 Exe=$exePath
-                ExeRunDir=
+                ExeRunDir=$exeRunDir
                 ExeCommandLine=$exeCommandLine
                 AppId=$steamAppId
 
@@ -84,11 +85,14 @@ object SteamUtils {
         )
     }
 
-    private fun steamClientFiles(): Array<String> = arrayOf(
+    private fun coreSteamClientFiles(): Array<String> = arrayOf(
         "GameOverlayRenderer.dll",
         "GameOverlayRenderer64.dll",
         "steamclient.dll",
         "steamclient64.dll",
+    )
+
+    private fun steamClientFiles(): Array<String> = coreSteamClientFiles() + arrayOf(
         "steamclient_loader_x32.exe",
         "steamclient_loader_x64.exe",
     )
@@ -146,7 +150,7 @@ object SteamUtils {
         val backupDir = File(imageFs.wineprefix, "drive_c/Program Files (x86)/Steam/steamclient_backup")
         backupDir.mkdirs()
 
-        steamClientFiles().forEach { file ->
+        coreSteamClientFiles().forEach { file ->
             val dll = File(imageFs.wineprefix, "drive_c/Program Files (x86)/Steam/$file")
             if (dll.exists()) {
                 Files.copy(dll.toPath(), File(backupDir, "$file.orig").toPath(), StandardCopyOption.REPLACE_EXISTING)
@@ -170,11 +174,18 @@ object SteamUtils {
         val origDir = File(imageFs.wineprefix, "drive_c/Program Files (x86)/Steam")
         val backupDir = File(imageFs.wineprefix, "drive_c/Program Files (x86)/Steam/steamclient_backup")
         if (backupDir.exists()) {
-            steamClientFiles().forEach { file ->
+            coreSteamClientFiles().forEach { file ->
                 val dll = File(backupDir, "$file.orig")
                 if (dll.exists()) {
                     Files.copy(dll.toPath(), File(origDir, file).toPath(), StandardCopyOption.REPLACE_EXISTING)
                     restoredCount++
+                }
+            }
+
+            arrayOf("steamclient_loader_x32.exe.orig", "steamclient_loader_x64.exe.orig").forEach { loaderBackup ->
+                val staleBackup = File(backupDir, loaderBackup)
+                if (staleBackup.exists()) {
+                    staleBackup.delete()
                 }
             }
         }
@@ -182,6 +193,13 @@ object SteamUtils {
         val extraDllDir = File(imageFs.wineprefix, "drive_c/Program Files (x86)/Steam/extra_dlls")
         if (extraDllDir.exists()) {
             extraDllDir.deleteRecursively()
+        }
+
+        arrayOf("steamclient_loader_x32.exe", "steamclient_loader_x64.exe").forEach { loaderExe ->
+            val staleLoader = File(origDir, loaderExe)
+            if (staleLoader.exists()) {
+                staleLoader.delete()
+            }
         }
 
         val idLog = if (steamAppId >= 0) steamAppId.toString() else "unknown"
@@ -275,11 +293,13 @@ object SteamUtils {
             File(steamConfigDir, "loginusers.vdf").writeText(vdfFileText)
             val rootDir = imageFs.rootDir
             val userRegFile = File(rootDir, ImageFs.WINEPREFIX + "/user.reg")
+            
             val steamRoot = "C:\\Program Files (x86)\\Steam"
             val steamExe = "$steamRoot\\steam.exe"
+
             val hkcu = "Software\\Valve\\Steam"
             WineRegistryEditor(userRegFile).use { reg ->
-                reg.setStringValue("Software\\Valve\\Steam", "AutoLoginUser", PrefManager.username)
+                reg.setStringValue(hkcu, "AutoLoginUser", PrefManager.username)
                 reg.setStringValue(hkcu, "SteamExe", steamExe)
                 reg.setStringValue(hkcu, "SteamPath", steamRoot)
                 reg.setStringValue(hkcu, "InstallPath", steamRoot)

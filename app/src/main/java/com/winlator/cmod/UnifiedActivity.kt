@@ -4692,7 +4692,7 @@ class UnifiedActivity : ComponentActivity() {
                         modifier = Modifier.padding(horizontal = 2.dp)
                     )
                     IconButton(
-                        onClick = { queueSize++; PrefManager.downloadQueueSize = queueSize },
+                        onClick = { queueSize++; PrefManager.downloadQueueSize = queueSize; com.winlator.cmod.steam.service.SteamService.checkQueue() },
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Increase Queue", tint = TextPrimary, modifier = Modifier.size(18.dp))

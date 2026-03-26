@@ -51,8 +51,8 @@ object SteamClientManager {
     fun isColdClientInstalled(context: Context): Boolean {
         val imageFs = ImageFs.find(context)
         val loaderExe = File(imageFs.rootDir, "${ImageFs.WINEPREFIX}/drive_c/Program Files (x86)/Steam/steamclient_loader_x64.exe")
-        val loaderDll = File(imageFs.rootDir, "${ImageFs.WINEPREFIX}/drive_c/Program Files (x86)/Steam/steamclient_loader_x64.dll")
-        return loaderExe.exists() && loaderExe.length() > 0 && loaderDll.exists() && loaderDll.length() > 0
+        val stubDrm = File(imageFs.rootDir, "${ImageFs.WINEPREFIX}/drive_c/Program Files (x86)/Steam/extra_dlls/StubDRM64.dll")
+        return loaderExe.exists() && loaderExe.length() > 0 && stubDrm.exists() && stubDrm.length() > 0
     }
 
     @JvmStatic
@@ -204,6 +204,26 @@ object SteamClientManager {
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to extract steam archive: ${e.message}")
+            false
+        }
+    }
+
+    @JvmStatic
+    fun forceExtractSteam(context: Context): Boolean {
+        val steamFile = File(context.filesDir, "steam.tzst")
+        if (!steamFile.exists()) return false
+
+        val imageFs = ImageFs.find(context)
+        return try {
+            TarCompressorUtils.extract(
+                TarCompressorUtils.Type.ZSTD,
+                steamFile,
+                imageFs.rootDir,
+                null
+            )
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to force extract steam archive: ${e.message}")
             false
         }
     }

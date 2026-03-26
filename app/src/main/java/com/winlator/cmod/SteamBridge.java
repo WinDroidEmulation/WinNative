@@ -50,6 +50,18 @@ public class SteamBridge {
         }
     }
 
+    public static boolean forceExtractSteam(Context context) {
+        try {
+            Class<?> clazz = Class.forName("com.winlator.cmod.steam.SteamClientManager");
+            Object instance = clazz.getField("INSTANCE").get(null);
+            Method method = clazz.getMethod("forceExtractSteam", Context.class);
+            return (Boolean) method.invoke(instance, context);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to call SteamClientManager.forceExtractSteam", e);
+            return false;
+        }
+    }
+
     public static boolean isSteamDownloaded(Context context) {
         try {
             Class<?> clazz = Class.forName("com.winlator.cmod.steam.SteamClientManager");
@@ -85,6 +97,21 @@ public class SteamBridge {
             return (Boolean) method.invoke(instance, context);
         } catch (Exception e) {
             Log.e(TAG, "Failed to call SteamClientManager.ensureSteamReady", e);
+            return false;
+        }
+    }
+
+    /**
+     * Downloads steam-token.tzst if missing, then extracts it. Blocking call.
+     */
+    public static boolean ensureRealSteamSupportReady(Context context) {
+        try {
+            Class<?> clazz = Class.forName("com.winlator.cmod.steam.SteamClientManager");
+            Object instance = clazz.getField("INSTANCE").get(null);
+            Method method = clazz.getMethod("ensureRealSteamSupportReady", Context.class);
+            return (Boolean) method.invoke(instance, context);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to call SteamClientManager.ensureRealSteamSupportReady", e);
             return false;
         }
     }

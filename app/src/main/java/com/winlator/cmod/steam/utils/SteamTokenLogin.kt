@@ -24,9 +24,28 @@ class SteamTokenLogin(
     private val imageFs: ImageFs,
     private val guestProgramLauncherComponent: GuestProgramLauncherComponent? = null,
 ) {
-    fun setupSteamFiles() {
+    private fun clearCachedClientState() {
+        try {
+            val localSteamDir = File(imageFs.wineprefix, "drive_c/users/${ImageFs.USER}/AppData/Local/Steam")
+            val steamDir = File(imageFs.wineprefix, "drive_c/Program Files (x86)/Steam")
+
+            listOf(
+                File(localSteamDir, "htmlcache"),
+                File(steamDir, "appcache/httpcache"),
+                File(steamDir, "appcache/librarycache"),
+            ).forEach { cacheDir ->
+                if (cacheDir.exists()) {
+                    cacheDir.deleteRecursively()
+                }
+            }
+        } catch (e: Exception) {
+            Timber.tag("SteamTokenLogin").w(e, "Failed to clear cached Steam client state")
+        }
+    }
+
+    fun setupSteamFiles(forceFreshClientToken: Boolean = false) {
         SteamUtils.autoLoginUserChanges(imageFs)
-        phase1SteamConfig()
+        phase1SteamConfig(forceFreshClientToken)
     }
 
     private fun hdr(): String {
@@ -136,15 +155,17 @@ class SteamTokenLogin(
         """.trimIndent()
     }
 
-    fun phase1SteamConfig() {
+    fun phase1SteamConfig(forceFreshClientToken: Boolean = false) {
         val steamConfigDir = File(imageFs.wineprefix, "drive_c/Program Files (x86)/Steam/config").toPath()
         Files.createDirectories(steamConfigDir)
+        val localSteamDir = File(imageFs.wineprefix, "drive_c/users/${ImageFs.USER}/AppData/Local/Steam").toPath()
+        Files.createDirectories(localSteamDir)
 
         val configVdfPath = steamConfigDir.resolve("config.vdf")
-        var shouldWriteConfig = true
+        var shouldWriteConfig = forceFreshClientToken || !Files.exists(configVdfPath)
         var shouldProcessPhase2 = false
 
-        if (Files.exists(configVdfPath)) {
+        if (!shouldWriteConfig && Files.exists(configVdfPath)) {
             val vdfContent = FileUtils.readString(configVdfPath.toFile()) ?: ""
             if (vdfContent.contains("ConnectCache")) {
                 val vdfData = KeyValue.loadFromString(vdfContent)
@@ -156,7 +177,10 @@ class SteamTokenLogin(
                     try {
                         val decodedToken =
                             deobfuscateToken(connectCacheValue.trimEnd(NULL_CHAR), mtbf.toLong()).trimEnd(NULL_CHAR)
-                        if (JWT(decodedToken).isExpired(TOKEN_EXPIRE_TIME)) {
+                        if (decodedToken != token) {
+                            Timber.tag("SteamTokenLogin").d("Saved JWT differs from current refresh token, overriding config.vdf")
+                            shouldWriteConfig = true
+                        } else if (JWT(decodedToken).isExpired(TOKEN_EXPIRE_TIME)) {
                             Timber.tag("SteamTokenLogin").d("Saved JWT expired, overriding config.vdf")
                             shouldWriteConfig = true
                         } else {
@@ -187,25 +211,30 @@ class SteamTokenLogin(
         if (shouldWriteConfig && token.isNotEmpty()) {
             Timber.tag("SteamTokenLogin").d("Overriding config.vdf")
             Files.write(configVdfPath, createConfigVdf().toByteArray())
+            clearCachedClientState()
 
             FileUtils.chmod(File(steamConfigDir.toFile(), "loginusers.vdf"), 505)
             FileUtils.chmod(File(steamConfigDir.toFile(), "config.vdf"), 505)
 
-            val localSteamDir = File(imageFs.wineprefix, "drive_c/users/${ImageFs.USER}/AppData/Local/Steam").toPath()
-            localSteamDir.createDirectories()
             if (localSteamDir.resolve("local.vdf").exists()) {
                 Files.delete(localSteamDir.resolve("local.vdf"))
             }
-        } else if (shouldProcessPhase2) {
+
+            if (guestProgramLauncherComponent == null) {
+                Timber.tag("SteamTokenLogin").d("Config updated but launcher is not ready for local.vdf phase 2")
+            } else {
+                phase2LocalConfig(forceFreshClientToken)
+            }
+        } else if (shouldProcessPhase2 || forceFreshClientToken || !localSteamDir.resolve("local.vdf").exists()) {
             if (guestProgramLauncherComponent == null) {
                 Timber.tag("SteamTokenLogin").d("Skipping phase 2 until launcher is ready")
             } else {
-                phase2LocalConfig()
+                phase2LocalConfig(forceFreshClientToken)
             }
         }
     }
 
-    fun phase2LocalConfig() {
+    fun phase2LocalConfig(forceFreshClientToken: Boolean = false) {
         try {
             val tokenArchive = File(imageFs.rootDir.parentFile, "steam-token.tzst")
             if (!tokenArchive.exists()) {
@@ -220,7 +249,7 @@ class SteamTokenLogin(
             val localSteamDir = File(imageFs.wineprefix, "drive_c/users/${ImageFs.USER}/AppData/Local/Steam").toPath()
             Files.createDirectories(localSteamDir)
 
-            if (localSteamDir.resolve("local.vdf").exists()) {
+            if (!forceFreshClientToken && localSteamDir.resolve("local.vdf").exists()) {
                 val vdfContent = FileUtils.readString(localSteamDir.resolve("local.vdf").toFile()) ?: ""
                 val vdfData = KeyValue.loadFromString(vdfContent)
                 val connectCacheValue = vdfData?.get("Software")?.get("Valve")?.get("Steam")
@@ -228,7 +257,7 @@ class SteamTokenLogin(
                 if (connectCacheValue != null) {
                     try {
                         val decodedToken = decryptToken(connectCacheValue.trimEnd(NULL_CHAR))
-                        if (!JWT(decodedToken).isExpired(TOKEN_EXPIRE_TIME)) {
+                        if (decodedToken == token && !JWT(decodedToken).isExpired(TOKEN_EXPIRE_TIME)) {
                             Timber.tag("SteamTokenLogin").d("Saved JWT is not expired, do not override local.vdf")
                             return
                         }
@@ -240,6 +269,7 @@ class SteamTokenLogin(
 
             Timber.tag("SteamTokenLogin").d("Overriding local.vdf")
             Files.write(localSteamDir.resolve("local.vdf"), createLocalVdf().toByteArray())
+            clearCachedClientState()
             killWineServer()
             FileUtils.chmod(File(localSteamDir.toFile(), "local.vdf"), 505)
         } catch (e: Exception) {

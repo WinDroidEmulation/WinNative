@@ -22,6 +22,7 @@ PFN_vkEnumeratePhysicalDevices enumeratePhysicalDevices;
 PFN_vkDestroyInstance destroyInstance;
 
 static void *vulkan_handle = NULL;
+static void *vulkan_mapping_handle = NULL;
 
 
 static char *get_native_library_dir(JNIEnv *env, jobject context) {
@@ -114,20 +115,38 @@ static void init_original_vulkan() {
 }
 
 static void init_vulkan(JNIEnv  *env, jobject context, const char *driver_name) {
-    char *tmpdir;
-    char *library_name;
-    char *native_library_dir;
+    char *tmpdir = NULL;
+    char *library_name = NULL;
+    char *native_library_dir = NULL;
 
     const char *driver_path = get_driver_path(env, context, driver_name);
 
-    if (driver_path && (access(driver_path, F_OK) == 0)) {
-        library_name = get_library_name(env, context, driver_name);
-        native_library_dir = get_native_library_dir(env, context);
-        asprintf(&tmpdir, "%s%s", driver_path, "temp");
-        mkdir(tmpdir, S_IRWXU | S_IRWXG);
+    if (!driver_path || access(driver_path, F_OK) != 0) {
+        init_original_vulkan();
+        return;
     }
 
-    vulkan_handle = adrenotools_open_libvulkan(RTLD_LOCAL | RTLD_NOW, ADRENOTOOLS_DRIVER_CUSTOM, tmpdir, native_library_dir, driver_path, library_name, NULL, NULL);
+    library_name = get_library_name(env, context, driver_name);
+    native_library_dir = get_native_library_dir(env, context);
+    if (!library_name || !native_library_dir) {
+        init_original_vulkan();
+        return;
+    }
+
+    asprintf(&tmpdir, "%s%s", driver_path, "temp");
+    mkdir(tmpdir, S_IRWXU | S_IRWXG);
+
+    vulkan_mapping_handle = NULL;
+    vulkan_handle = adrenotools_open_libvulkan(
+        RTLD_LOCAL | RTLD_NOW,
+        ADRENOTOOLS_DRIVER_CUSTOM | ADRENOTOOLS_DRIVER_GPU_MAPPING_IMPORT,
+        tmpdir,
+        native_library_dir,
+        driver_path,
+        library_name,
+        NULL,
+        &vulkan_mapping_handle
+    );
 }
 
 static VkResult create_instance(jstring driverName, JNIEnv *env, jobject context) {
