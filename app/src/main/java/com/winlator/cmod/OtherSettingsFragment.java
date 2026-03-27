@@ -47,6 +47,7 @@ public class OtherSettingsFragment extends Fragment {
     private CompoundButton cbEnableFileProvider;
     private CompoundButton cbOpenInBrowser;
     private CompoundButton cbShareClipboard;
+    private CompoundButton cbCheckForUpdates;
     private SeekBar sbCursorSpeed;
 
     private static final int REQUEST_CODE_WINLATOR_PATH = 1002;
@@ -206,6 +207,9 @@ public class OtherSettingsFragment extends Fragment {
         cbShareClipboard = view.findViewById(R.id.CBShareAndroidClipboard);
         cbShareClipboard.setChecked(preferences.getBoolean("share_android_clipboard", false));
 
+        cbCheckForUpdates = view.findViewById(R.id.CBCheckForUpdates);
+        cbCheckForUpdates.setChecked(preferences.getBoolean("check_for_updates", true));
+
         view.findViewById(R.id.BTReInstallImagefs).setOnClickListener(v -> {
             ContentDialog.confirm(context, R.string.settings_general_confirm_reinstall_imagefs, () -> ImageFsInstaller.installFromAssets((MainActivity) getActivity()));
         });
@@ -228,6 +232,7 @@ public class OtherSettingsFragment extends Fragment {
         editor.putBoolean("enable_file_provider", cbEnableFileProvider.isChecked());
         editor.putBoolean("open_with_android_browser", cbOpenInBrowser.isChecked());
         editor.putBoolean("share_android_clipboard", cbShareClipboard.isChecked());
+        editor.putBoolean("check_for_updates", cbCheckForUpdates.isChecked());
 
         editor.apply();
         if (isAdded()) {

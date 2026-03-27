@@ -1533,6 +1533,11 @@ public class XServerDisplayActivity extends AppCompatActivity {
             return;
         }
 
+        if ("EPIC".equals(gameSource)) {
+            syncEpicCloudOnExit(onComplete);
+            return;
+        }
+
         if ("GOG".equals(gameSource)) {
             syncGogCloudOnExit(onComplete);
             return;
@@ -1577,6 +1582,42 @@ public class XServerDisplayActivity extends AppCompatActivity {
             com.winlator.cmod.steam.service.SteamService.syncCloudOnExit(this, appId, callback);
         } catch (Exception e) {
             Log.w("XServerDisplayActivity", "Failed to initiate Steam cloud sync", e);
+            onComplete.run();
+        }
+    }
+
+    private void syncEpicCloudOnExit(Runnable onComplete) {
+        String appIdStr = shortcut.getExtra("app_id");
+        if (appIdStr == null || appIdStr.isEmpty()) {
+            onComplete.run();
+            return;
+        }
+
+        try {
+            int appId = Integer.parseInt(appIdStr);
+            Log.d("XServerDisplayActivity", "Syncing Epic cloud saves for appId=" + appId);
+            preloaderDialog.showOnUiThread("Cloud Sync Uploading...");
+
+            new Thread(() -> {
+                try {
+                    Boolean syncSuccess = (Boolean) kotlinx.coroutines.BuildersKt.runBlocking(
+                            kotlinx.coroutines.Dispatchers.getIO(),
+                            (scope, continuation) -> com.winlator.cmod.epic.service.EpicCloudSavesManager.INSTANCE.syncCloudSaves(
+                                    this,
+                                    appId,
+                                    "upload",
+                                    continuation
+                            )
+                    );
+                    Log.d("XServerDisplayActivity", "Epic cloud sync complete for appId=" + appId + ", success=" + syncSuccess);
+                } catch (Exception e) {
+                    Log.w("XServerDisplayActivity", "Failed to initiate Epic cloud sync", e);
+                } finally {
+                    runOnUiThread(onComplete);
+                }
+            }).start();
+        } catch (Exception e) {
+            Log.w("XServerDisplayActivity", "Failed to parse Epic app_id for cloud sync", e);
             onComplete.run();
         }
     }

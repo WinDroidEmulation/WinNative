@@ -691,6 +691,8 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="settings_general_open_browser_summary">Open supported web links in the Android browser instead of inside Wine.</string>
     <string name="settings_general_clipboard_summary">Allow copy and paste between Android and Wine sessions.</string>
     <string name="settings_general_imagefs_summary">Restore bundled system files without removing your existing containers.</string>
+    <string name="settings_general_check_for_updates">Check for Updates</string>
+    <string name="settings_general_check_for_updates_summary">Automatically check for new app versions on launch and periodically.</string>
 
     <!-- Settings > Audio -->
     <string name="settings_audio_midi_sound_font">MIDI SoundFont</string>
@@ -887,6 +889,11 @@ Installed path:
     <string name="google_cloud_error_no_snapshot">No saved store logins were found in Google cloud sync yet.</string>
     <string name="google_cloud_error_generic">Google cloud sync failed: %1$s</string>
     <string name="google_cloud_error_before_open">Google cloud sync failed before Google Saved Games could open.</string>
+    <string name="cloud_saves_title">Cloud Saves</string>
+    <string name="cloud_saves_backup">Backup Cloud Save</string>
+    <string name="cloud_saves_restore">Restore Cloud Save</string>
+    <string name="cloud_saves_backing_up">Backing up cloud save\u2026</string>
+    <string name="cloud_saves_restoring">Restoring cloud save\u2026</string>
 
     <!-- Saves > Import and Export -->
     <string name="saves_import_export_title">Saves</string>

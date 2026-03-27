@@ -110,6 +110,8 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
+import com.winlator.cmod.core.UpdateChecker
+import com.winlator.cmod.google.GameSaveBackupManager
 import com.winlator.cmod.steam.service.SteamService
 import com.winlator.cmod.steam.utils.PrefManager
 import com.winlator.cmod.steam.utils.getAvatarURL
@@ -364,6 +366,11 @@ class UnifiedActivity : ComponentActivity() {
             SteamService.start(this)
         }
         libraryRefreshSignal++
+
+        // Check for updates when returning (e.g. after exiting a game/container)
+        // This respects the 1-hour interval, so if the hour elapsed during gameplay
+        // the check triggers now
+        UpdateChecker.checkForUpdate(this, force = false)
     }
 
     override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean {
@@ -442,6 +449,9 @@ class UnifiedActivity : ComponentActivity() {
         if (requestCode == com.winlator.cmod.google.CloudSyncManager.REQUEST_CODE_SAVED_GAMES_PERMISSIONS) {
             com.winlator.cmod.google.CloudSyncManager.onSavedGamesPermissionResult(this)
         }
+        if (requestCode == GameSaveBackupManager.REQUEST_CODE_DRIVE_AUTH) {
+            GameSaveBackupManager.onDriveAuthResult(this, resultCode)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -477,6 +487,9 @@ class UnifiedActivity : ComponentActivity() {
                 window.decorView.systemGestureExclusionRects = listOf(exclusionRect)
             }
         }
+
+        // Check for app updates on launch (force = true to skip interval on startup)
+        UpdateChecker.checkForUpdate(this, force = true)
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
@@ -1720,6 +1733,7 @@ class UnifiedActivity : ComponentActivity() {
     private enum class GameSettingsScreen {
         Menu,
         Saves,
+        CloudSaves,
         Uninstall,
     }
 
@@ -2172,6 +2186,11 @@ class UnifiedActivity : ComponentActivity() {
                             onClick = { currentTab = GameSettingsScreen.Saves },
                         ),
                         GameSettingsActionItem(
+                            title = stringResource(R.string.cloud_saves_title),
+                            icon = Icons.Default.CloudSync,
+                            onClick = { currentTab = GameSettingsScreen.CloudSaves },
+                        ),
+                        GameSettingsActionItem(
                             title = if (isCustom) stringResource(R.string.common_ui_remove) else stringResource(R.string.common_ui_uninstall),
                             icon = Icons.Default.Delete,
                             accentColor = DangerRed,
@@ -2198,6 +2217,77 @@ class UnifiedActivity : ComponentActivity() {
                                 title = stringResource(R.string.common_ui_import),
                                 icon = Icons.Default.Download,
                                 onClick = { importLauncher.launch(arrayOf("application/zip")) },
+                            ),
+                            GameSettingsActionItem(
+                                title = stringResource(R.string.common_ui_back),
+                                icon = Icons.Default.ArrowBack,
+                                onClick = { currentTab = GameSettingsScreen.Menu },
+                            ),
+                        ),
+                    )
+                }
+
+                GameSettingsScreen.CloudSaves -> {
+                    var isWorking by remember { mutableStateOf(false) }
+                    var statusMessage by remember { mutableStateOf<String?>(null) }
+
+                    if (statusMessage != null) {
+                        Text(
+                            text = statusMessage!!,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                        )
+                    }
+                    if (isWorking) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                            color = Accent,
+                            trackColor = CardBorder,
+                        )
+                    }
+
+                    val gameSource = when {
+                        isEpic -> GameSaveBackupManager.GameSource.EPIC
+                        else -> GameSaveBackupManager.GameSource.STEAM
+                    }
+                    val gameIdStr = if (isEpic) epicId.toString() else app.id.toString()
+
+                    GameSettingsActionGrid(
+                        actions = listOf(
+                            GameSettingsActionItem(
+                                title = stringResource(R.string.cloud_saves_backup),
+                                icon = Icons.Default.CloudUpload,
+                                onClick = {
+                                    if (!isWorking) {
+                                        isWorking = true
+                                        statusMessage = context.getString(R.string.cloud_saves_backing_up)
+                                        scope.launch {
+                                            val result = GameSaveBackupManager.backupToGoogle(
+                                                this@UnifiedActivity, gameSource, gameIdStr, app.name,
+                                            )
+                                            isWorking = false
+                                            statusMessage = result.message
+                                        }
+                                    }
+                                },
+                            ),
+                            GameSettingsActionItem(
+                                title = stringResource(R.string.cloud_saves_restore),
+                                icon = Icons.Default.CloudDownload,
+                                onClick = {
+                                    if (!isWorking) {
+                                        isWorking = true
+                                        statusMessage = context.getString(R.string.cloud_saves_restoring)
+                                        scope.launch {
+                                            val result = GameSaveBackupManager.restoreFromGoogle(
+                                                this@UnifiedActivity, gameSource, gameIdStr, app.name,
+                                            )
+                                            isWorking = false
+                                            statusMessage = result.message
+                                        }
+                                    }
+                                },
                             ),
                             GameSettingsActionItem(
                                 title = stringResource(R.string.common_ui_back),
@@ -2323,6 +2413,11 @@ class UnifiedActivity : ComponentActivity() {
                                 onClick = { currentTab = GameSettingsScreen.Saves },
                             ),
                             GameSettingsActionItem(
+                                title = stringResource(R.string.cloud_saves_title),
+                                icon = Icons.Default.CloudSync,
+                                onClick = { currentTab = GameSettingsScreen.CloudSaves },
+                            ),
+                            GameSettingsActionItem(
                                 title = stringResource(R.string.common_ui_uninstall),
                                 icon = Icons.Default.Delete,
                                 accentColor = DangerRed,
@@ -2358,6 +2453,77 @@ class UnifiedActivity : ComponentActivity() {
                     )
                 }
 
+                GameSettingsScreen.CloudSaves -> {
+                    var isWorking by remember { mutableStateOf(false) }
+                    var statusMessage by remember { mutableStateOf<String?>(null) }
+
+                    if (statusMessage != null) {
+                        Text(
+                            text = statusMessage!!,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                        )
+                    }
+                    if (isWorking) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                            color = Accent,
+                            trackColor = CardBorder,
+                        )
+                    }
+
+                    GameSettingsActionGrid(
+                        actions = listOf(
+                            GameSettingsActionItem(
+                                title = stringResource(R.string.cloud_saves_backup),
+                                icon = Icons.Default.CloudUpload,
+                                onClick = {
+                                    if (!isWorking) {
+                                        isWorking = true
+                                        statusMessage = context.getString(R.string.cloud_saves_backing_up)
+                                        scope.launch {
+                                            val result = GameSaveBackupManager.backupToGoogle(
+                                                this@UnifiedActivity,
+                                                GameSaveBackupManager.GameSource.GOG,
+                                                app.id,
+                                                app.title,
+                                            )
+                                            isWorking = false
+                                            statusMessage = result.message
+                                        }
+                                    }
+                                },
+                            ),
+                            GameSettingsActionItem(
+                                title = stringResource(R.string.cloud_saves_restore),
+                                icon = Icons.Default.CloudDownload,
+                                onClick = {
+                                    if (!isWorking) {
+                                        isWorking = true
+                                        statusMessage = context.getString(R.string.cloud_saves_restoring)
+                                        scope.launch {
+                                            val result = GameSaveBackupManager.restoreFromGoogle(
+                                                this@UnifiedActivity,
+                                                GameSaveBackupManager.GameSource.GOG,
+                                                app.id,
+                                                app.title,
+                                            )
+                                            isWorking = false
+                                            statusMessage = result.message
+                                        }
+                                    }
+                                },
+                            ),
+                            GameSettingsActionItem(
+                                title = stringResource(R.string.common_ui_back),
+                                icon = Icons.Default.ArrowBack,
+                                onClick = { currentTab = GameSettingsScreen.Menu },
+                            ),
+                        ),
+                    )
+                }
+
                 GameSettingsScreen.Uninstall -> {
                     UninstallConfirmation(
                         message = getString(R.string.library_games_uninstall_confirm, app.title),
@@ -2382,7 +2548,7 @@ class UnifiedActivity : ComponentActivity() {
 
     // Library Game Detail Dialog
 
-    private enum class LibraryDetailScreen { Main, Saves, Uninstall }
+    private enum class LibraryDetailScreen { Main, Saves, CloudSaves, Uninstall }
 
     @Composable
     private fun LibraryGameDetailDialog(
@@ -2597,7 +2763,7 @@ class UnifiedActivity : ComponentActivity() {
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
-                modifier = Modifier.fillMaxWidth(0.864f).fillMaxHeight(0.92f),
+                modifier = Modifier.fillMaxWidth(0.864f).fillMaxHeight(0.96f),
                 shape = RoundedCornerShape(20.dp),
                 color = CardDark,
             ) {
@@ -2605,7 +2771,7 @@ class UnifiedActivity : ComponentActivity() {
                     Column(Modifier.fillMaxSize()) {
                         // Hero image section
                         Box(
-                            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.42f)
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.38f)
                         ) {
                             if (heroImageUrl != null) {
                                 AsyncImage(
@@ -2643,7 +2809,7 @@ class UnifiedActivity : ComponentActivity() {
                             Column(
                                 modifier = Modifier
                                     .align(Alignment.BottomStart)
-                                    .padding(start = 24.dp, end = 80.dp, bottom = 24.dp)
+                                    .padding(start = 24.dp, end = 80.dp, bottom = 36.dp)
                             ) {
                                 Text(
                                     app.name,
@@ -2670,7 +2836,7 @@ class UnifiedActivity : ComponentActivity() {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .padding(horizontal = 24.dp, vertical = 14.dp),
+                                        .padding(horizontal = 24.dp, vertical = 10.dp),
                                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                                 ) {
                                     // Left: Game details as individual cards
@@ -2719,31 +2885,6 @@ class UnifiedActivity : ComponentActivity() {
                                             DetailCard(stringResource(R.string.common_ui_release_date), releaseDateText)
                                         }
 
-                                        // Playtime row — multiple stats side by side
-                                        val hasPlaytimeStats = lastPlayed > 0L || totalPlaytime > 0L || playCount > 0
-                                        if (hasPlaytimeStats) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                            ) {
-                                                if (lastPlayed > 0L) {
-                                                    val dateFormat = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
-                                                    DetailCard(stringResource(R.string.library_games_last_played), dateFormat.format(java.util.Date(lastPlayed)), modifier = Modifier.weight(1f))
-                                                }
-                                                if (totalPlaytime > 0L) {
-                                                    val hours = totalPlaytime / 3_600_000L
-                                                    val minutes = (totalPlaytime % 3_600_000L) / 60_000L
-                                                    val playtimeText = when {
-                                                        hours > 0 -> "${hours}h ${minutes}m"
-                                                        else -> "${minutes}m"
-                                                    }
-                                                    DetailCard(stringResource(R.string.library_games_playtime), playtimeText, modifier = Modifier.weight(1f))
-                                                }
-                                                if (playCount > 0) {
-                                                    DetailCard(stringResource(R.string.library_games_plays), playCount.toString(), modifier = Modifier.weight(1f))
-                                                }
-                                            }
-                                        }
                                     }
 
                                     // Right: Compact action buttons
@@ -2862,6 +3003,18 @@ class UnifiedActivity : ComponentActivity() {
                                             )
 
                                             CompactActionButton(
+                                                icon = Icons.Default.CloudSync,
+                                                label = stringResource(R.string.cloud_saves_title),
+                                                modifier = Modifier.weight(1f),
+                                                onClick = { currentScreen = LibraryDetailScreen.CloudSaves },
+                                            )
+                                        }
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            CompactActionButton(
                                                 icon = Icons.Default.Delete,
                                                 label = if (isCustom) stringResource(R.string.common_ui_remove) else stringResource(R.string.common_ui_uninstall),
                                                 tint = DangerRed,
@@ -2934,6 +3087,104 @@ class UnifiedActivity : ComponentActivity() {
                                             ),
                                         )
                                     }
+
+                                    Spacer(Modifier.weight(1f))
+                                    TextButton(onClick = { currentScreen = LibraryDetailScreen.Main }) {
+                                        Icon(Icons.Default.ArrowBack, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(stringResource(R.string.common_ui_back), color = TextSecondary)
+                                    }
+                                }
+                            }
+
+                            LibraryDetailScreen.CloudSaves -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Text(
+                                        stringResource(R.string.cloud_saves_title),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = TextSecondary,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.1.sp,
+                                    )
+
+                                    var isWorking by remember { mutableStateOf(false) }
+                                    var statusMessage by remember { mutableStateOf<String?>(null) }
+
+                                    if (statusMessage != null) {
+                                        Text(
+                                            text = statusMessage!!,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextSecondary,
+                                        )
+                                    }
+                                    if (isWorking) {
+                                        LinearProgressIndicator(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            color = Accent,
+                                            trackColor = CardBorder,
+                                        )
+                                    }
+
+                                    val detailGameSource = when {
+                                        isGog -> GameSaveBackupManager.GameSource.GOG
+                                        isEpic -> GameSaveBackupManager.GameSource.EPIC
+                                        else -> GameSaveBackupManager.GameSource.STEAM
+                                    }
+                                    val detailGameId = when {
+                                        isGog -> gogGame!!.id
+                                        isEpic -> epicId.toString()
+                                        else -> app.id.toString()
+                                    }
+
+                                    GameSettingsActionGrid(
+                                        actions = listOf(
+                                            GameSettingsActionItem(
+                                                title = stringResource(R.string.cloud_saves_backup),
+                                                icon = Icons.Default.CloudUpload,
+                                                onClick = {
+                                                    if (!isWorking) {
+                                                        isWorking = true
+                                                        statusMessage = context.getString(R.string.cloud_saves_backing_up)
+                                                        scope.launch {
+                                                            val result = GameSaveBackupManager.backupToGoogle(
+                                                                this@UnifiedActivity,
+                                                                detailGameSource,
+                                                                detailGameId,
+                                                                app.name,
+                                                            )
+                                                            isWorking = false
+                                                            statusMessage = result.message
+                                                        }
+                                                    }
+                                                },
+                                            ),
+                                            GameSettingsActionItem(
+                                                title = stringResource(R.string.cloud_saves_restore),
+                                                icon = Icons.Default.CloudDownload,
+                                                onClick = {
+                                                    if (!isWorking) {
+                                                        isWorking = true
+                                                        statusMessage = context.getString(R.string.cloud_saves_restoring)
+                                                        scope.launch {
+                                                            val result = GameSaveBackupManager.restoreFromGoogle(
+                                                                this@UnifiedActivity,
+                                                                detailGameSource,
+                                                                detailGameId,
+                                                                app.name,
+                                                            )
+                                                            isWorking = false
+                                                            statusMessage = result.message
+                                                        }
+                                                    }
+                                                },
+                                            ),
+                                        ),
+                                    )
 
                                     Spacer(Modifier.weight(1f))
                                     TextButton(onClick = { currentScreen = LibraryDetailScreen.Main }) {

@@ -13,6 +13,7 @@ import dagger.hilt.android.HiltAndroidApp
 import com.winlator.cmod.gog.service.GOGAuthManager
 import com.winlator.cmod.gog.service.GOGConstants
 import com.winlator.cmod.gog.service.GOGService
+import com.winlator.cmod.core.UpdateChecker
 import com.winlator.cmod.steam.service.SteamService
 import com.winlator.cmod.steam.utils.PrefManager
 import com.winlator.cmod.service.DownloadService
@@ -45,6 +46,9 @@ class PluviaApp : Application() {
         if (PrefManager.enableSteamLogs) {
             timber.log.Timber.plant(timber.log.Timber.DebugTree())
         }
+
+        // Record install timestamp for update checker
+        UpdateChecker.refreshInstallTimestamp(this)
 
         DownloadService.populateDownloadService(this)
 

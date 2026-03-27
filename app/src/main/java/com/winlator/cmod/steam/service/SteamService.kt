@@ -3893,6 +3893,45 @@ class SteamService : Service(), IChallengeUrlChanged {
             fun onComplete()
         }
 
+        /**
+         * Sync cloud saves for backup/restore purposes without closing the app.
+         * @param preferredAction "download" or "upload"
+         * @return true if sync succeeded
+         */
+        suspend fun syncCloudSavesForBackup(context: android.content.Context, appId: Int, preferredAction: String): Boolean {
+            return withContext(Dispatchers.IO) {
+                try {
+                    val accountId = userSteamId?.accountID?.toLong()
+                        ?: PrefManager.steamUserAccountId.takeIf { it != 0 }?.toLong()
+                        ?: 0L
+                    val prefixToPath: (String) -> String = { prefix ->
+                        com.winlator.cmod.steam.enums.PathType.from(prefix).toAbsPath(context, appId, accountId)
+                    }
+                    val steamInst = instance
+                    val appInfo = getAppInfoOf(appId)
+                    val steamCloud = steamInst?._steamCloud
+                    val clientId = PrefManager.clientId
+
+                    if (steamInst == null || appInfo == null || steamCloud == null) {
+                        return@withContext false
+                    }
+
+                    SteamAutoCloud.syncUserFiles(
+                        appInfo = appInfo,
+                        clientId = clientId,
+                        steamInstance = steamInst,
+                        steamCloud = steamCloud,
+                        prefixToPath = prefixToPath,
+                        onProgress = { _, _ -> },
+                    ).await()
+                    true
+                } catch (e: Exception) {
+                    timber.log.Timber.tag("SteamService").e(e, "syncCloudSavesForBackup failed")
+                    false
+                }
+            }
+        }
+
         @JvmStatic
         fun syncCloudOnExit(context: android.content.Context, appId: Int, callback: CloudSyncCallback) {
             val accountId = userSteamId?.accountID?.toLong()
