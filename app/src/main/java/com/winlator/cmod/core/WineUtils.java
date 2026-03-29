@@ -18,8 +18,12 @@ import java.util.Locale;
 
 public abstract class WineUtils {
     public static void createDosdevicesSymlinks(Container container) {
-        String dosdevicesPath = (new File(container.getRootDir(), ".wine/dosdevices")).getPath();
-        File[] files = (new File(dosdevicesPath)).listFiles();
+        File dosdevicesDir = new File(container.getRootDir(), ".wine/dosdevices");
+        if (!dosdevicesDir.exists()) {
+            dosdevicesDir.mkdirs();
+        }
+        String dosdevicesPath = dosdevicesDir.getPath();
+        File[] files = dosdevicesDir.listFiles();
         if (files != null) for (File file : files) if (file.getName().matches("[a-z]:")) file.delete();
 
         FileUtils.symlink("../drive_c", dosdevicesPath+"/c:");
