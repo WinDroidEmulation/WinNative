@@ -391,9 +391,6 @@ public class FrameRating extends LinearLayout implements Runnable {
     private void updateRendererText() {
         if (this.tvRenderer != null) {
             String text = (this.isNativeActive ? "+" : "") + this.rendererName;
-            if (this.gpuName != null && !this.gpuName.isEmpty()) {
-                text += " (" + this.gpuName + ")";
-            }
             this.tvRenderer.setText(text);
             this.tvRenderer.setVisibility(this.enableRenderer ? View.VISIBLE : View.GONE);
             updateSeparators(getOrientation() == LinearLayout.HORIZONTAL);
