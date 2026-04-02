@@ -214,8 +214,10 @@ public abstract class AppUtils {
     public static PopupWindow showPopupWindow(View anchor, View contentView, int width, int height) {
         Context context = anchor.getContext();
         PopupWindow popupWindow = new PopupWindow(context);
-        popupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        popupWindow.setElevation(5.0f);
+        popupWindow.setBackgroundDrawable(androidx.core.content.ContextCompat.getDrawable(context, R.drawable.content_popup_menu_background));
+        popupWindow.setElevation(10.0f);
+        popupWindow.setFocusable(true);
+        popupWindow.setOutsideTouchable(true);
 
         if (width == 0 && height == 0) {
             int widthMeasureSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
