@@ -14,6 +14,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.view.ContextThemeWrapper;
 import androidx.appcompat.widget.PopupMenu;
@@ -31,6 +32,7 @@ import com.winlator.cmod.container.Shortcut;
 import com.winlator.cmod.contentdialog.ContentDialog;
 import com.winlator.cmod.contentdialog.StorageInfoDialog;
 import com.winlator.cmod.core.PreloaderDialog;
+import com.winlator.cmod.google.ContainerBackupManager;
 import com.winlator.cmod.xenvironment.ImageFs;
 
 import java.util.ArrayList;
@@ -122,10 +124,82 @@ public class ContainersFragment extends Fragment {
             case R.id.containers_menu_add:
                 openAddContainer();
                 return true;
-
             default:
                 return super.onOptionsItemSelected(menuItem);
         }
+    }
+
+    private void showContainerBackupsDialog(Container container) {
+        ContentDialog dialog = new ContentDialog(requireContext());
+        dialog.setTitle(R.string.container_backups_title);
+        dialog.setMessage(R.string.container_backups_prompt);
+
+        TextView backupButton = dialog.findViewById(R.id.BTConfirm);
+        TextView restoreButton = dialog.findViewById(R.id.BTCancel);
+        backupButton.setText(R.string.google_cloud_backup);
+        restoreButton.setText(R.string.google_cloud_restore);
+
+        dialog.setOnConfirmCallback(() -> startContainerBackup(container));
+        dialog.setOnCancelCallback(() -> startContainerRestore(container));
+        dialog.show();
+    }
+
+    private void startContainerBackup(Container container) {
+        preloaderDialog.show(R.string.container_backups_backing_up);
+        ContainerBackupManager.backupContainer(requireActivity(), container, result -> {
+            preloaderDialog.close();
+            ContentDialog.alert(requireContext(), result.message, () -> {});
+        });
+    }
+
+    private void startContainerRestore(Container container) {
+        preloaderDialog.show(R.string.container_backups_checking);
+        ContainerBackupManager.prepareRestore(requireActivity(), container, preparation -> {
+            if (!isAdded()) {
+                preloaderDialog.close();
+                return;
+            }
+
+            if (!preparation.success) {
+                preloaderDialog.close();
+                ContentDialog.alert(requireContext(), preparation.message, () -> {});
+                return;
+            }
+
+            if (preparation.matchedFile != null) {
+                executeContainerRestore(container, preparation.matchedFile);
+                return;
+            }
+
+            preloaderDialog.close();
+            showBackupSelectionDialog(container, preparation.candidates);
+        });
+    }
+
+    private void showBackupSelectionDialog(Container container, List<ContainerBackupManager.DriveBackupFile> backups) {
+        if (backups == null || backups.isEmpty()) {
+            ContentDialog.alert(requireContext(), R.string.container_backups_no_files, () -> {});
+            return;
+        }
+
+        String[] names = new String[backups.size()];
+        for (int i = 0; i < backups.size(); i++) {
+            names[i] = backups.get(i).name;
+        }
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.container_backups_select_title)
+                .setItems(names, (dialog, which) -> executeContainerRestore(container, backups.get(which)))
+                .setNegativeButton(R.string.common_ui_cancel, null)
+                .show();
+    }
+
+    private void executeContainerRestore(Container container, ContainerBackupManager.DriveBackupFile driveFile) {
+        preloaderDialog.show(R.string.container_backups_restoring);
+        ContainerBackupManager.restoreContainerFromDriveFile(requireActivity(), container, driveFile, result -> {
+            preloaderDialog.close();
+            ContentDialog.alert(requireContext(), result.message, () -> {});
+        });
     }
 
     private class ContainersAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
@@ -250,6 +324,9 @@ public class ContainersFragment extends Fragment {
                 switch (menuItem.getItemId()) {
                     case R.id.container_duplicate:
                         duplicateContainer(container);
+                        break;
+                    case R.id.container_backups:
+                        showContainerBackupsDialog(container);
                         break;
                     case R.id.container_remove:
                         ContentDialog.confirm(getContext(), R.string.containers_list_confirm_remove, () -> {

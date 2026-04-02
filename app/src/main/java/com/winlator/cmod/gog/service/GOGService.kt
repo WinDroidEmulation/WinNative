@@ -121,6 +121,16 @@ class GOGService : Service() {
             return GOGAuthManager.getStoredCredentials(context)
         }
 
+        suspend fun getResolvedSaveDirectories(context: Context, appId: String): List<File> {
+            val activeInstance = getInstance() ?: return emptyList()
+            val gameId = ContainerUtils.extractGameIdFromContainerId(appId).toString()
+            val game = activeInstance.gogManager.getGameFromDbById(gameId) ?: return emptyList()
+            return activeInstance.gogManager.getSaveDirectoryPath(context, appId, game.title)
+                ?.map { File(it.location) }
+                ?.filter { it.exists() || !it.path.isNullOrEmpty() }
+                ?: emptyList()
+        }
+
         suspend fun validateCredentials(context: Context): Result<Boolean> {
             return GOGAuthManager.validateCredentials(context)
         }

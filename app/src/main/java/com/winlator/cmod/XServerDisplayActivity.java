@@ -1023,50 +1023,51 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 com.winlator.cmod.core.UpdateChecker.INSTANCE.cancelPostGameCheck();
 
                 if (shortcut != null) {
-                    CloudSyncHelper.forceDownloadOnContainerSwap(this, shortcut);
+                    if (isCloudSyncEnabledForShortcut()) {
+                        CloudSyncHelper.forceDownloadOnContainerSwap(this, shortcut);
 
-                    // Cloud save sync on every store-game launch
-                    if (CloudSyncHelper.isStoreGame(shortcut)) {
-                        if (!CloudSyncHelper.hasLocalCloudSaves(this, shortcut)) {
-                            // First launch — download silently
-                            preloaderDialog.showOnUiThread("Downloading Cloud Saves\u2026");
-                            CloudSyncHelper.downloadCloudSaves(this, shortcut);
-                            preloaderDialog.showOnUiThread("Starting " +
-                                    (shortcutName != null ? shortcutName : "Container") + "...");
-                        } else if (CloudSyncHelper.cloudSavesDiffer(this, shortcut)) {
-                            // Cloud differs from local — ask the user what to do
-                            final CountDownLatch dialogLatch = new CountDownLatch(1);
-                            final boolean[] useCloud = {false};
-                            runOnUiThread(() -> {
-                                new android.app.AlertDialog.Builder(XServerDisplayActivity.this, com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog)
-                                    .setTitle("Cloud Save Sync")
-                                    .setMessage("A newer cloud save was detected for this title.\n\n" +
-                                            "Would you like to sync the latest data from the cloud " +
-                                            "(this will replace your local save), or continue with " +
-                                            "your current local data?")
-                                    .setPositiveButton("Sync from Cloud", (dialog, which) -> {
-                                        useCloud[0] = true;
-                                        dialogLatch.countDown();
-                                    })
-                                    .setNegativeButton("Keep Local Save", (dialog, which) -> {
-                                        useCloud[0] = false;
-                                        dialogLatch.countDown();
-                                    })
-                                    .setCancelable(false)
-                                    .show();
-                            });
-                            try {
-                                dialogLatch.await();
-                            } catch (InterruptedException ignored) {}
-
-                            if (useCloud[0]) {
-                                preloaderDialog.showOnUiThread("Syncing Cloud Saves\u2026");
+                        // Cloud save sync on every store-game launch
+                        if (CloudSyncHelper.isStoreGame(shortcut)) {
+                            if (!CloudSyncHelper.hasLocalCloudSaves(this, shortcut)) {
+                                // First launch — download silently
+                                preloaderDialog.showOnUiThread("Downloading Cloud Saves\u2026");
                                 CloudSyncHelper.downloadCloudSaves(this, shortcut);
                                 preloaderDialog.showOnUiThread("Starting " +
                                         (shortcutName != null ? shortcutName : "Container") + "...");
+                            } else if (CloudSyncHelper.cloudSavesDiffer(this, shortcut)) {
+                                // Cloud differs from local — ask the user what to do
+                                final CountDownLatch dialogLatch = new CountDownLatch(1);
+                                final boolean[] useCloud = {false};
+                                runOnUiThread(() -> {
+                                    new android.app.AlertDialog.Builder(XServerDisplayActivity.this, com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog)
+                                        .setTitle("Cloud Save Sync")
+                                        .setMessage("A newer cloud save was detected for this title.\n\n" +
+                                                "Would you like to sync the latest data from the cloud " +
+                                                "(this will replace your local save), or continue with " +
+                                                "your current local data?")
+                                        .setPositiveButton("Sync from Cloud", (dialog, which) -> {
+                                            useCloud[0] = true;
+                                            dialogLatch.countDown();
+                                        })
+                                        .setNegativeButton("Keep Local Save", (dialog, which) -> {
+                                            useCloud[0] = false;
+                                            dialogLatch.countDown();
+                                        })
+                                        .setCancelable(false)
+                                        .show();
+                                });
+                                try {
+                                    dialogLatch.await();
+                                } catch (InterruptedException ignored) {}
+
+                                if (useCloud[0]) {
+                                    preloaderDialog.showOnUiThread("Syncing Cloud Saves\u2026");
+                                    CloudSyncHelper.downloadCloudSaves(this, shortcut);
+                                    preloaderDialog.showOnUiThread("Starting " +
+                                            (shortcutName != null ? shortcutName : "Container") + "...");
+                                }
                             }
                         }
-                        // else: saves are in sync — skip silently
                     }
                 }
                 setupWineSystemFiles();
@@ -1601,6 +1602,11 @@ public class XServerDisplayActivity extends AppCompatActivity {
             return;
         }
 
+        if (!isCloudSyncEnabledForShortcut()) {
+            onComplete.run();
+            return;
+        }
+
         // Wrap onComplete to chain auto backup to Google Drive after store sync finishes
         Runnable afterStoreSync = () -> runAutoBackupIfEnabled(onComplete);
 
@@ -1629,6 +1635,11 @@ public class XServerDisplayActivity extends AppCompatActivity {
      */
     private void runAutoBackupIfEnabled(Runnable onComplete) {
         if (shortcut == null) {
+            onComplete.run();
+            return;
+        }
+
+        if (!isCloudSyncEnabledForShortcut()) {
             onComplete.run();
             return;
         }
@@ -1686,6 +1697,10 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 runOnUiThread(onComplete);
             }
         }).start();
+    }
+
+    private boolean isCloudSyncEnabledForShortcut() {
+        return shortcut == null || !"1".equals(shortcut.getExtra("cloud_sync_disabled", "0"));
     }
 
     /**

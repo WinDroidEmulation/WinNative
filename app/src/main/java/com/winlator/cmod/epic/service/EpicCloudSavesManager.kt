@@ -71,6 +71,15 @@ object EpicCloudSavesManager {
         return determineSyncAction(context, creds.accountId, game, "auto") != SyncAction.NONE
     }
 
+    suspend fun getResolvedSaveDirectory(context: Context, appId: Int): File? = withContext(Dispatchers.IO) {
+        val game = EpicService.getEpicGameOf(appId) ?: return@withContext null
+        if (!game.cloudSaveEnabled) return@withContext null
+        val credentials = EpicAuthManager.getStoredCredentials(context)
+        if (credentials.isFailure) return@withContext null
+        val creds = credentials.getOrNull() ?: return@withContext null
+        resolveSaveDirectory(context, game, creds.accountId)
+    }
+
     /**
      * Sync cloud saves for a game (bidirectional sync with conflict detection)
      * preferredAction = download -> Force downloads all files and overwrites current files

@@ -8,10 +8,12 @@ import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.Scope
 import com.google.android.gms.games.PlayGames
 import com.google.android.gms.tasks.Tasks
-import com.winlator.cmod.container.ContainerManager
 import com.winlator.cmod.epic.service.EpicCloudSavesManager
 import com.winlator.cmod.gog.service.GOGService
+import com.winlator.cmod.steam.enums.PathType
 import com.winlator.cmod.steam.service.SteamService
+import com.winlator.cmod.steam.utils.FileUtils as SteamFileUtils
+import com.winlator.cmod.steam.utils.PrefManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -27,6 +29,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.zip.ZipEntry
@@ -46,7 +49,8 @@ import kotlin.coroutines.resume
 object GameSaveBackupManager {
 
     private const val TAG = "GameSaveBackup"
-    private const val DRIVE_FOLDER_NAME = "WinNative"
+    private const val DRIVE_ROOT_FOLDER_NAME = "WinNative"
+    private const val DRIVE_GAMES_FOLDER_NAME = "Games"
     private const val DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
     private const val PREFS_NAME = "google_store_login_sync"
     private const val KEY_GOOGLE_SYNC_ENABLED = "google_sync_enabled"
@@ -68,9 +72,11 @@ object GameSaveBackupManager {
         val message: String,
     )
 
-    // Pending operation to resume after Drive consent
-    private var pendingOperation: (suspend (String) -> BackupResult)? = null
-    private var pendingCallback: ((BackupResult) -> Unit)? = null
+    private data class SaveBackupSource(
+        val zipRoot: String,
+        val localDir: File,
+        val exactFiles: List<File>? = null,
+    )
 
     /**
      * Backup a game's cloud save to Google Drive.
@@ -120,21 +126,21 @@ object GameSaveBackupManager {
         }
 
         // Step 2: Locate and zip local save files
-        val saveDir = getLocalSaveDir(context, gameSource, gameId)
-        if (saveDir == null || !saveDir.exists() || saveDir.listFiles().isNullOrEmpty()) {
+        val saveSources = getLocalSaveSources(context, gameSource, gameId, forRestore = false)
+        if (saveSources.isEmpty()) {
             return BackupResult(false, "No local save files found for this game.")
         }
 
-        val zipBytes = zipDirectory(saveDir)
+        val zipBytes = zipSaveSources(saveSources)
         if (zipBytes.isEmpty()) {
             return BackupResult(false, "Save files are empty.")
         }
 
         // Step 3: Upload to Google Drive
         val fileName = buildDriveFileName(gameSource, gameId, gameName)
-        val folderId = getOrCreateDriveFolder(accessToken)
+        val folderId = getOrCreateGameBackupsFolder(accessToken)
         if (folderId == null) {
-            return BackupResult(false, "Failed to create WinNative folder on Google Drive.")
+            return BackupResult(false, "Failed to create WinNative/Games folder on Google Drive.")
         }
 
         val existingFileId = findDriveFile(accessToken, folderId, fileName)
@@ -180,19 +186,19 @@ object GameSaveBackupManager {
                 ?: return@withContext BackupResult(false, "Google Drive authorization required.")
 
             // Go straight to zipping local saves — no syncDownFromProvider
-            val saveDir = getLocalSaveDir(context, gameSource, gameId)
-            if (saveDir == null || !saveDir.exists() || saveDir.listFiles().isNullOrEmpty()) {
+            val saveSources = getLocalSaveSources(context, gameSource, gameId, forRestore = false)
+            if (saveSources.isEmpty()) {
                 return@withContext BackupResult(false, "No local save files found for auto backup.")
             }
 
-            val zipBytes = zipDirectory(saveDir)
+            val zipBytes = zipSaveSources(saveSources)
             if (zipBytes.isEmpty()) {
                 return@withContext BackupResult(false, "Save files are empty.")
             }
 
             val fileName = buildDriveFileName(gameSource, gameId, gameName)
-            val folderId = getOrCreateDriveFolder(accessToken)
-                ?: return@withContext BackupResult(false, "Failed to create WinNative folder on Google Drive.")
+            val folderId = getOrCreateGameBackupsFolder(accessToken)
+                ?: return@withContext BackupResult(false, "Failed to create WinNative/Games folder on Google Drive.")
 
             val existingFileId = findDriveFile(accessToken, folderId, fileName)
             val uploaded = if (existingFileId != null) {
@@ -269,9 +275,9 @@ object GameSaveBackupManager {
         val fileName = buildDriveFileName(gameSource, gameId, gameName)
 
         // Step 1: Find and download from Google Drive
-        val folderId = getOrCreateDriveFolder(accessToken)
+        val folderId = getOrCreateGameBackupsFolder(accessToken)
         if (folderId == null) {
-            return BackupResult(false, "Failed to access WinNative folder on Google Drive.")
+            return BackupResult(false, "Failed to access WinNative/Games folder on Google Drive.")
         }
 
         val fileId = findDriveFile(accessToken, folderId, fileName)
@@ -287,12 +293,11 @@ object GameSaveBackupManager {
         Timber.tag(TAG).i("Drive download complete: $fileName (${zipBytes.size} bytes)")
 
         // Step 2: Unzip to local save directory
-        val saveDir = getLocalSaveDir(context, gameSource, gameId)
-        if (saveDir == null) {
+        val saveSources = getLocalSaveSources(context, gameSource, gameId, forRestore = true)
+        if (saveSources.isEmpty()) {
             return BackupResult(false, "Cannot determine save directory for this game.")
         }
-        saveDir.mkdirs()
-        unzipToDirectory(zipBytes, saveDir)
+        unzipToSources(zipBytes, saveSources)
 
         // Step 3: Upload back to provider
         val uploadOk = syncUpToProvider(context, gameSource, gameId)
@@ -311,9 +316,6 @@ object GameSaveBackupManager {
             Timber.tag(TAG).i("Drive authorization consent granted")
         } else {
             Timber.tag(TAG).w("Drive authorization consent denied (resultCode=%d)", resultCode)
-            pendingOperation = null
-            pendingCallback?.invoke(BackupResult(false, "Google Drive access was denied."))
-            pendingCallback = null
         }
     }
 
@@ -363,52 +365,166 @@ object GameSaveBackupManager {
 
     // ── Local save directory resolution ──
 
-    private fun getLocalSaveDir(context: Context, source: GameSource, gameId: String): File? {
+    private suspend fun getLocalSaveSources(
+        context: Context,
+        source: GameSource,
+        gameId: String,
+        forRestore: Boolean,
+    ): List<SaveBackupSource> {
         return when (source) {
-            GameSource.STEAM -> {
-                val appId = gameId.toIntOrNull() ?: return null
-                val appDir = SteamService.getAppDirPath(appId)
-                val goldbergSaves = File(appDir, "steam_settings/saves")
-                if (goldbergSaves.exists()) goldbergSaves else {
-                    val cm = ContainerManager(context)
-                    val shortcut = cm.loadShortcuts().find { it.getExtra("app_id") == gameId }
-                    if (shortcut != null) {
-                        File(shortcut.container.getRootDir(), ".wine/drive_c/users/xuser/Saved Games")
-                    } else {
-                        goldbergSaves
+            GameSource.STEAM -> getSteamSaveSources(context, gameId, forRestore)
+            GameSource.EPIC -> getEpicSaveSources(context, gameId, forRestore)
+            GameSource.GOG -> getGogSaveSources(context, gameId, forRestore)
+        }
+    }
+
+    private suspend fun getSteamSaveSources(
+        context: Context,
+        gameId: String,
+        forRestore: Boolean,
+    ): List<SaveBackupSource> {
+        val appId = gameId.toIntOrNull() ?: return emptyList()
+        val sources = linkedMapOf<String, SaveBackupSource>()
+        val appDir = SteamService.getAppDirPath(appId)
+        val goldbergSaves = File(appDir, "steam_settings/saves")
+        if (forRestore || (goldbergSaves.exists() && !goldbergSaves.listFiles().isNullOrEmpty())) {
+            sources["steam/steam_settings/saves"] = SaveBackupSource(
+                zipRoot = "steam/steam_settings/saves",
+                localDir = goldbergSaves,
+            )
+        }
+
+        val accountId = SteamService.userSteamId?.accountID?.toLong()
+            ?: PrefManager.steamUserAccountId.takeIf { it != 0 }?.toLong()
+            ?: 0L
+        val prefixToPath: (String) -> String = { prefix ->
+            PathType.from(prefix).toAbsPath(context, appId, accountId)
+        }
+
+        val trackedFiles = SteamService.getTrackedCloudSaveFiles(appId).orEmpty()
+        if (trackedFiles.isNotEmpty()) {
+            trackedFiles
+                .groupBy { it.root to it.substitutedPath }
+                .forEach { (key, files) ->
+                    val (root, substitutedPath) = key
+                    val localDir = File(Paths.get(prefixToPath(root.toString()), substitutedPath).toString())
+                    val zipRoot = buildSteamZipRoot(root, substitutedPath)
+                    val exactFiles = files
+                        .map { it.getAbsPath(prefixToPath) }
+                        .map { it.toFile() }
+                        .filter { forRestore || it.exists() }
+                    if (forRestore || exactFiles.isNotEmpty()) {
+                        sources[zipRoot] = SaveBackupSource(zipRoot, localDir, exactFiles)
                     }
                 }
-            }
-            GameSource.EPIC -> {
-                val appId = gameId.toIntOrNull() ?: return null
-                val cm = ContainerManager(context)
-                val shortcut = cm.loadShortcuts().find {
-                    it.getExtra("game_source") == "EPIC" && it.getExtra("app_id") == gameId
+        } else {
+            val appInfo = SteamService.getAppInfoOf(appId)
+            val savePatterns = appInfo?.ufs?.saveFilePatterns.orEmpty().filter { it.root.isWindows }
+            if (savePatterns.isNotEmpty()) {
+                savePatterns.groupBy { it.root to it.substitutedPath }.forEach { (key, patterns) ->
+                    val (root, substitutedPath) = key
+                    val localDir = File(Paths.get(prefixToPath(root.toString()), substitutedPath).toString())
+                    val exactFiles = mutableListOf<File>()
+                    patterns.forEach { pattern ->
+                        if (localDir.exists()) {
+                            SteamFileUtils.findFilesRecursive(
+                                rootPath = localDir.toPath(),
+                                pattern = pattern.pattern,
+                                maxDepth = if (pattern.recursive != 0) 5 else 0,
+                            ).forEach { path ->
+                                exactFiles += path.toFile()
+                            }
+                        }
+                    }
+                    if (forRestore || exactFiles.isNotEmpty()) {
+                        sources[buildSteamZipRoot(root, substitutedPath)] = SaveBackupSource(
+                            zipRoot = buildSteamZipRoot(root, substitutedPath),
+                            localDir = localDir,
+                            exactFiles = exactFiles.distinct(),
+                        )
+                    }
                 }
-                if (shortcut != null) {
-                    File(shortcut.container.getRootDir(), ".wine/drive_c/users/xuser/Saved Games")
-                } else null
-            }
-            GameSource.GOG -> {
-                val cm = ContainerManager(context)
-                val shortcut = cm.loadShortcuts().find {
-                    it.getExtra("game_source") == "GOG" && it.getExtra("gog_id") == gameId
+            } else {
+                val steamUserDataDir = File(PathType.SteamUserData.toAbsPath(context, appId, accountId))
+                if (forRestore || (steamUserDataDir.exists() && !steamUserDataDir.listFiles().isNullOrEmpty())) {
+                    sources["steam/${PathType.SteamUserData.name}"] = SaveBackupSource(
+                        zipRoot = "steam/${PathType.SteamUserData.name}",
+                        localDir = steamUserDataDir,
+                    )
                 }
-                if (shortcut != null) {
-                    File(shortcut.container.getRootDir(), ".wine/drive_c/users/xuser/Saved Games")
-                } else null
+            }
+        }
+
+        return sources.values.toList()
+    }
+
+    private suspend fun getEpicSaveSources(
+        context: Context,
+        gameId: String,
+        forRestore: Boolean,
+    ): List<SaveBackupSource> {
+        val appId = gameId.toIntOrNull() ?: return emptyList()
+        val saveDir = EpicCloudSavesManager.getResolvedSaveDirectory(context, appId) ?: return emptyList()
+        return if (forRestore || (saveDir.exists() && !saveDir.listFiles().isNullOrEmpty())) {
+            listOf(SaveBackupSource("epic/save", saveDir))
+        } else {
+            emptyList()
+        }
+    }
+
+    private suspend fun getGogSaveSources(
+        context: Context,
+        gameId: String,
+        forRestore: Boolean,
+    ): List<SaveBackupSource> {
+        val saveDirs = GOGService.getResolvedSaveDirectories(context, "GOG_$gameId")
+        return saveDirs.mapIndexedNotNull { index, saveDir ->
+            if (forRestore || (saveDir.exists() && !saveDir.listFiles().isNullOrEmpty())) {
+                SaveBackupSource("gog/location_$index", saveDir)
+            } else {
+                null
             }
         }
     }
 
     // ── Zip helpers ──
 
-    private fun zipDirectory(dir: File): ByteArray {
+    private fun zipSaveSources(sources: List<SaveBackupSource>): ByteArray {
         val baos = ByteArrayOutputStream()
         ZipOutputStream(baos).use { zos ->
-            zipDirRecursive(zos, dir, "")
+            sources.forEach { source ->
+                val zipRoot = source.zipRoot.trimEnd('/')
+                if (zipRoot.isEmpty()) return@forEach
+                zos.putNextEntry(ZipEntry("$zipRoot/"))
+                zos.closeEntry()
+
+                val exactFiles = source.exactFiles?.filter { it.exists() }.orEmpty()
+                if (exactFiles.isNotEmpty()) {
+                    exactFiles.forEach { file ->
+                        val relativePath = source.localDir.toPath()
+                            .relativize(file.toPath())
+                            .toString()
+                            .replace(File.separatorChar, '/')
+                        addFileToZip(zos, file, "$zipRoot/$relativePath")
+                    }
+                } else if (source.localDir.exists()) {
+                    zipDirRecursive(zos, source.localDir, zipRoot)
+                }
+            }
         }
         return baos.toByteArray()
+    }
+
+    private fun addFileToZip(zos: ZipOutputStream, file: File, entryName: String) {
+        zos.putNextEntry(ZipEntry(entryName))
+        FileInputStream(file).use { fis ->
+            val buf = ByteArray(8192)
+            var len: Int
+            while (fis.read(buf).also { len = it } > 0) {
+                zos.write(buf, 0, len)
+            }
+        }
+        zos.closeEntry()
     }
 
     private fun zipDirRecursive(zos: ZipOutputStream, dir: File, baseName: String) {
@@ -433,14 +549,33 @@ object GameSaveBackupManager {
         }
     }
 
-    private fun unzipToDirectory(zipBytes: ByteArray, destDir: File) {
+    private fun unzipToSources(zipBytes: ByteArray, sources: List<SaveBackupSource>) {
+        val sortedSources = sources.sortedByDescending { it.zipRoot.length }
         ZipInputStream(ByteArrayInputStream(zipBytes)).use { zis ->
             var entry: ZipEntry?
             while (zis.nextEntry.also { entry = it } != null) {
-                val file = File(destDir, entry!!.name)
-                if (!file.canonicalPath.startsWith(destDir.canonicalPath)) {
+                val entryName = entry!!.name
+                val source = sortedSources.firstOrNull {
+                    entryName == "${it.zipRoot}/" || entryName.startsWith("${it.zipRoot}/")
+                }
+                if (source == null) {
+                    zis.closeEntry()
+                    continue
+                }
+
+                val relativeName = entryName.removePrefix(source.zipRoot).removePrefix("/")
+                if (relativeName.isEmpty()) {
+                    source.localDir.mkdirs()
+                    zis.closeEntry()
+                    continue
+                }
+
+                val file = File(source.localDir, relativeName)
+                if (!file.canonicalPath.startsWith(source.localDir.canonicalPath + File.separator)
+                    && file.canonicalPath != source.localDir.canonicalPath) {
                     throw SecurityException("Zip entry tries to escape target directory")
                 }
+
                 if (entry!!.isDirectory) {
                     file.mkdirs()
                 } else {
@@ -560,11 +695,22 @@ object GameSaveBackupManager {
     /**
      * Find or create the "WinNative" folder on Google Drive.
      */
-    private fun getOrCreateDriveFolder(accessToken: String): String? {
-        // Search for existing folder
-        val query = "name='$DRIVE_FOLDER_NAME' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    private fun getOrCreateGameBackupsFolder(accessToken: String): String? {
+        val rootFolderId = getOrCreateDriveFolder(accessToken, null, DRIVE_ROOT_FOLDER_NAME)
+            ?: return null
+        return getOrCreateDriveFolder(accessToken, rootFolderId, DRIVE_GAMES_FOLDER_NAME)
+    }
+
+    private fun getOrCreateDriveFolder(accessToken: String, parentId: String?, folderName: String): String? {
+        val queryBuilder = StringBuilder()
+            .append("name='").append(escapeDriveQuery(folderName)).append("'")
+            .append(" and mimeType='application/vnd.google-apps.folder'")
+            .append(" and trashed=false")
+        if (parentId != null) {
+            queryBuilder.append(" and '").append(parentId).append("' in parents")
+        }
         val searchRequest = Request.Builder()
-            .url("https://www.googleapis.com/drive/v3/files?q=${java.net.URLEncoder.encode(query, "UTF-8")}&fields=files(id,name)")
+            .url("https://www.googleapis.com/drive/v3/files?q=${java.net.URLEncoder.encode(queryBuilder.toString(), "UTF-8")}&fields=files(id,name)")
             .addHeader("Authorization", "Bearer $accessToken")
             .get()
             .build()
@@ -583,8 +729,11 @@ object GameSaveBackupManager {
 
         // Create the folder
         val metadata = JSONObject().apply {
-            put("name", DRIVE_FOLDER_NAME)
+            put("name", folderName)
             put("mimeType", "application/vnd.google-apps.folder")
+            if (parentId != null) {
+                put("parents", org.json.JSONArray().put(parentId))
+            }
         }
 
         val createRequest = Request.Builder()
@@ -597,10 +746,10 @@ object GameSaveBackupManager {
             if (response.isSuccessful) {
                 val json = JSONObject(response.body?.string() ?: "{}")
                 val folderId = json.getString("id")
-                Timber.tag(TAG).i("Created Drive folder: %s", folderId)
+                Timber.tag(TAG).i("Created Drive folder %s: %s", folderName, folderId)
                 return folderId
             }
-            Timber.tag(TAG).e("Failed to create Drive folder: %d %s", response.code, response.message)
+            Timber.tag(TAG).e("Failed to create Drive folder %s: %d %s", folderName, response.code, response.message)
         }
         return null
     }
@@ -609,7 +758,7 @@ object GameSaveBackupManager {
      * Find a file by name inside a specific folder.
      */
     private fun findDriveFile(accessToken: String, folderId: String, fileName: String): String? {
-        val query = "name='$fileName' and '$folderId' in parents and trashed=false"
+        val query = "name='${escapeDriveQuery(fileName)}' and '$folderId' in parents and trashed=false"
         val request = Request.Builder()
             .url("https://www.googleapis.com/drive/v3/files?q=${java.net.URLEncoder.encode(query, "UTF-8")}&fields=files(id,name)")
             .addHeader("Authorization", "Bearer $accessToken")
@@ -714,4 +863,18 @@ object GameSaveBackupManager {
         }
         return null
     }
+
+    private fun buildSteamZipRoot(root: PathType, substitutedPath: String): String {
+        val normalizedPath = substitutedPath
+            .replace(File.separatorChar, '/')
+            .trim('/')
+        return if (normalizedPath.isEmpty()) {
+            "steam/${root.name}"
+        } else {
+            "steam/${root.name}/$normalizedPath"
+        }
+    }
+
+    private fun escapeDriveQuery(value: String): String =
+        value.replace("\\", "\\\\").replace("'", "\\'")
 }

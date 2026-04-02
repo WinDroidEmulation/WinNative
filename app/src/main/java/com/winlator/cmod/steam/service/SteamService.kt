@@ -3544,6 +3544,12 @@ class SteamService : Service(), IChallengeUrlChanged {
             }
         }
 
+        suspend fun getTrackedCloudSaveFiles(appId: Int): List<UserFileInfo>? {
+            return withContext(Dispatchers.IO) {
+                instance?.fileChangeListsDao?.getByAppId(appId)?.userFileInfo
+            }
+        }
+
         suspend fun forceSyncUserFiles(
             appId: Int,
             prefixToPath: (String) -> String,
