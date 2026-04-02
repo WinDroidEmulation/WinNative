@@ -8,18 +8,18 @@
         android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="8dp">
+        android:padding="16dp">
 
         <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            style="@style/OtherSettingsSectionLabel"
             android:text="@string/input_controls_editor_type" />
 
         <Spinner
-            style="@style/ComboBox"
+            style="@style/OtherSettingsSpinner"
             android:id="@+id/SType"
             android:layout_width="match_parent"
-            android:spinnerMode="dialog" />
+            android:layout_marginBottom="12dp"
+            android:spinnerMode="dropdown" />
 
         <LinearLayout
             android:id="@+id/LLShape"
@@ -28,38 +28,41 @@
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/OtherSettingsSectionLabel"
                 android:text="@string/input_controls_editor_shape" />
 
             <Spinner
-                style="@style/ComboBox"
+                style="@style/OtherSettingsSpinner"
                 android:id="@+id/SShape"
                 android:layout_width="match_parent"
-                android:spinnerMode="dialog" />
+                android:layout_marginBottom="12dp"
+                android:spinnerMode="dropdown" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
             android:orientation="horizontal">
 
             <TextView
+                style="@style/OtherSettingsSectionLabel"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="@string/input_controls_editor_scale"/>
 
             <TextView
                 android:id="@+id/TVScale"
+                style="@style/OtherSettingsSectionLabel"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:textColor="@color/settings_accent" />
         </LinearLayout>
 
         <SeekBar
             android:id="@+id/SBScale"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
             android:min="50"
             android:max="150" />
 
@@ -70,49 +73,51 @@
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/OtherSettingsSectionLabel"
                 android:text="@string/input_controls_editor_range" />
 
             <Spinner
-                style="@style/ComboBox"
+                style="@style/OtherSettingsSpinner"
                 android:id="@+id/SRange"
                 android:layout_width="match_parent"
-                android:spinnerMode="dialog" />
+                android:layout_marginBottom="12dp"
+                android:spinnerMode="dropdown" />
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/OtherSettingsSectionLabel"
                 android:text="@string/session_display_orientation" />
 
             <RadioGroup
                 android:id="@+id/RGOrientation"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
                 android:orientation="horizontal">
 
                 <RadioButton
                     android:id="@+id/RBHorizontal"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:textColor="@color/settings_text_primary"
                     android:text="@string/session_display_horizontal" />
 
                 <RadioButton
                     android:id="@+id/RBVertical"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:textColor="@color/settings_text_primary"
                     android:text="@string/session_display_vertical" />
             </RadioGroup>
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/OtherSettingsSectionLabel"
                 android:text="@string/session_display_columns" />
 
             <com.winlator.cmod.widget.NumberPicker
                 android:id="@+id/NPColumns"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
                 app:minValue="3"
                 app:maxValue="8" />
         </LinearLayout>
@@ -131,54 +136,56 @@
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/OtherSettingsSectionLabel"
                 android:text="@string/input_controls_editor_binding_up" />
 
             <Spinner
-                style="@style/ComboBox"
+                style="@style/OtherSettingsSpinner"
                 android:id="@+id/SBindingUp"
                 android:layout_width="match_parent"
-                android:spinnerMode="dialog" />
+                android:layout_marginBottom="12dp"
+                android:spinnerMode="dropdown" />
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/OtherSettingsSectionLabel"
                 android:text="@string/input_controls_editor_binding_right" />
 
             <Spinner
-                style="@style/ComboBox"
+                style="@style/OtherSettingsSpinner"
                 android:id="@+id/SBindingRight"
                 android:layout_width="match_parent"
-                android:spinnerMode="dialog" />
+                android:layout_marginBottom="12dp"
+                android:spinnerMode="dropdown" />
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/OtherSettingsSectionLabel"
                 android:text="@string/input_controls_editor_binding_down" />
 
             <Spinner
-                style="@style/ComboBox"
+                style="@style/OtherSettingsSpinner"
                 android:id="@+id/SBindingDown"
                 android:layout_width="match_parent"
-                android:spinnerMode="dialog" />
+                android:layout_marginBottom="12dp"
+                android:spinnerMode="dropdown" />
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/OtherSettingsSectionLabel"
                 android:text="@string/input_controls_editor_binding_left" />
 
             <Spinner
-                style="@style/ComboBox"
+                style="@style/OtherSettingsSpinner"
                 android:id="@+id/SBindingLeft"
                 android:layout_width="match_parent"
-                android:spinnerMode="dialog" />
+                android:layout_marginBottom="12dp"
+                android:spinnerMode="dropdown" />
         </LinearLayout>
 
         <CheckBox
             android:id="@+id/CBToggleSwitch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:textColor="@color/settings_text_primary"
             android:text="@string/input_controls_editor_toggle_switch" />
 
         <LinearLayout
@@ -188,21 +195,20 @@
             android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/OtherSettingsSectionLabel"
                 android:text="@string/common_ui_custom_text" />
 
             <EditText
-                style="@style/EditText"
+                style="@style/OtherSettingsEditText"
                 android:id="@+id/ETCustomText"
                 android:maxLength="8"
                 android:layout_width="match_parent"
+                android:layout_marginBottom="12dp"
                 android:hint="@string/common_ui_none"
                 android:inputType="textCapCharacters" />
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/OtherSettingsSectionLabel"
                 android:text="@string/common_ui_icon" />
 
             <HorizontalScrollView
