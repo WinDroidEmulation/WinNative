@@ -184,7 +184,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
     }
 
     private void loadTypeSpinner(final ControlElement element, Spinner spinner, Runnable callback) {
-        spinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, ControlElement.Type.names()));
+        AppUtils.setupThemedSpinner(spinner, this, Arrays.asList(ControlElement.Type.names()));
         spinner.setSelection(element.getType().ordinal(), false);
         spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
@@ -201,7 +201,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
     }
 
     private void loadShapeSpinner(final ControlElement element, Spinner spinner) {
-        spinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, ControlElement.Shape.names()));
+        AppUtils.setupThemedSpinner(spinner, this, Arrays.asList(ControlElement.Shape.names()));
         spinner.setSelection(element.getShape().ordinal(), false);
         spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
@@ -238,6 +238,8 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
         final Spinner sBindingType = view.findViewById(R.id.SBindingType);
         final Spinner sBinding = view.findViewById(R.id.SBinding);
 
+        AppUtils.setupThemedSpinner(sBindingType, this, Arrays.asList(getResources().getStringArray(R.array.binding_type_entries)));
+
         Runnable update = () -> {
             String[] bindingEntries = null;
             switch (sBindingType.getSelectedItemPosition()) {
@@ -252,7 +254,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
                     break;
             }
 
-            sBinding.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, bindingEntries));
+            AppUtils.setupThemedSpinner(sBinding, this, Arrays.asList(bindingEntries));
             AppUtils.setSpinnerSelectionFromValue(sBinding, element.getBindingAt(index).toString());
         };
 
@@ -309,7 +311,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
     }
 
     private void loadRangeSpinner(final ControlElement element, Spinner spinner) {
-        spinner.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, ControlElement.Range.names()));
+        AppUtils.setupThemedSpinner(spinner, this, Arrays.asList(ControlElement.Range.names()));
         spinner.setSelection(element.getRange().ordinal(), false);
         spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
