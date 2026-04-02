@@ -119,9 +119,6 @@ import com.winlator.cmod.steam.data.SteamApp
 import com.winlator.cmod.steam.data.DepotInfo
 import com.winlator.cmod.steam.data.DownloadInfo
 import com.winlator.cmod.steam.enums.DownloadPhase
-import com.winlator.cmod.steam.workshop.WorkshopDownloadRegistry
-import com.winlator.cmod.steam.workshop.WorkshopManager
-import com.winlator.cmod.steam.workshop.WorkshopManagerDialog
 import com.winlator.cmod.db.PluviaDatabase
 import com.winlator.cmod.utils.StorageUtils
 import com.winlator.cmod.utils.PeIconExtractor
@@ -2553,12 +2550,10 @@ class UnifiedActivity : ComponentActivity() {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
         var currentScreen by remember { mutableStateOf(LibraryDetailScreen.Main) }
-        var showWorkshopDialog by remember { mutableStateOf(false) }
 
         val isCustom = app.id < 0
         val isEpic = app.id >= 2000000000
         val isGog = gogGame != null
-        val isSteam = !isCustom && !isEpic && !isGog
         val epicId = if (isEpic) app.id - 2000000000 else 0
 
         val epicGame by produceState<EpicGame?>(initialValue = null, key1 = epicId) {
@@ -2991,20 +2986,18 @@ class UnifiedActivity : ComponentActivity() {
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         ) {
-                                            if (isSteam) {
-                                                CompactActionButton(
-                                                    icon = Icons.Default.Extension,
-                                                    label = "Workshop",
-                                                    modifier = Modifier.weight(1f),
-                                                    onClick = { showWorkshopDialog = true },
-                                                )
-                                            }
-
                                             CompactActionButton(
                                                 icon = Icons.Default.Save,
                                                 label = stringResource(R.string.saves_import_export_title),
                                                 modifier = Modifier.weight(1f),
                                                 onClick = { currentScreen = LibraryDetailScreen.Saves },
+                                            )
+
+                                            CompactActionButton(
+                                                icon = Icons.Default.CloudSync,
+                                                label = stringResource(R.string.cloud_saves_title),
+                                                modifier = Modifier.weight(1f),
+                                                onClick = { currentScreen = LibraryDetailScreen.CloudSaves },
                                             )
                                         }
 
@@ -3012,13 +3005,6 @@ class UnifiedActivity : ComponentActivity() {
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         ) {
-                                            CompactActionButton(
-                                                icon = Icons.Default.CloudSync,
-                                                label = stringResource(R.string.cloud_saves_title),
-                                                modifier = Modifier.weight(1f),
-                                                onClick = { currentScreen = LibraryDetailScreen.CloudSaves },
-                                            )
-
                                             CompactActionButton(
                                                 icon = Icons.Default.Delete,
                                                 label = if (isCustom) stringResource(R.string.common_ui_remove) else stringResource(R.string.common_ui_uninstall),
@@ -3286,29 +3272,6 @@ class UnifiedActivity : ComponentActivity() {
                     }
                 }
             }
-        }
-
-        if (isSteam && showWorkshopDialog) {
-            WorkshopManagerDialog(
-                visible = true,
-                appId = app.id,
-                gameName = app.name,
-                currentEnabledIds = WorkshopManager.parseEnabledIds(app.enabledWorkshopItemIds),
-                onSave = { enabledIds ->
-                    val result = persistWorkshopSelection(context, app, enabledIds)
-                    result.onSuccess { message ->
-                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
-                    }.onFailure { error ->
-                        android.widget.Toast.makeText(
-                            context,
-                            error.message ?: "Workshop update failed",
-                            android.widget.Toast.LENGTH_LONG,
-                        ).show()
-                    }
-                    result
-                },
-                onDismissRequest = { showWorkshopDialog = false },
-            )
         }
     }
 
@@ -5114,11 +5077,9 @@ class UnifiedActivity : ComponentActivity() {
         val status by info.getStatusFlow().collectAsState()
         val statusMessage by info.getStatusMessageFlow().collectAsState()
         val isSteam = id.startsWith("STEAM_")
-        val isWorkshop = id.startsWith("WORKSHOP_")
         val isEpic = id.startsWith("EPIC_")
         val isGog = id.startsWith("GOG_")
-        val appId = if (isSteam) id.removePrefix("STEAM_").toIntOrNull() ?: 0
-                    else if (isWorkshop) id.removePrefix("WORKSHOP_").toIntOrNull() ?: 0
+        val appId = if (isSteam) id.removePrefix("STEAM_").toIntOrNull() ?: 0 
                     else if (isEpic) id.removePrefix("EPIC_").toIntOrNull() ?: 0
                     else 0
         val gogId = if (isGog) id.removePrefix("GOG_") else ""
@@ -5130,27 +5091,17 @@ class UnifiedActivity : ComponentActivity() {
         var isFocused by remember { mutableStateOf(false) }
         val borderColor = if (isFocused || isSelected) Accent.copy(alpha = 0.8f) else Color.Transparent
 
-        LaunchedEffect(appId, gogId, isSteam, isWorkshop, isEpic, isGog) {
+        LaunchedEffect(appId, gogId, isSteam, isEpic, isGog) {
             withContext(Dispatchers.IO) { 
-                if (isSteam || isWorkshop) steamApp = db.steamAppDao().findApp(appId)
+                if (isSteam) steamApp = db.steamAppDao().findApp(appId)
                 else if (isEpic) epicGame = EpicService.getEpicGameOf(appId)
                 else if (isGog) gogGame = GOGService.getGOGGameOf(gogId)
             }
         }
 
         val unknownGameLabel = stringResource(R.string.library_games_unknown_game)
-        val workshopMetadata = if (isWorkshop) WorkshopDownloadRegistry.getMetadata(appId) else null
-        val displayName = when {
-            isWorkshop -> {
-                val baseName = steamApp?.name ?: workshopMetadata?.gameName ?: unknownGameLabel
-                "$baseName Workshop"
-            }
-            isSteam -> steamApp?.name
-            isEpic -> epicGame?.title
-            isGog -> gogGame?.title
-            else -> unknownGameLabel
-        }
-        val displayImage = if (isSteam || isWorkshop) steamApp?.getHeaderImageUrl()
+        val displayName = if (isSteam) steamApp?.name else if (isEpic) epicGame?.title else if (isGog) gogGame?.title else unknownGameLabel
+        val displayImage = if (isSteam) steamApp?.getHeaderImageUrl()
                            else if (isEpic) epicGame?.primaryImageUrl ?: epicGame?.iconUrl
                            else if (isGog) gogGame?.imageUrl ?: gogGame?.iconUrl
                            else null
@@ -5209,23 +5160,16 @@ class UnifiedActivity : ComponentActivity() {
                     
                     val statusText = when (status) {
                         DownloadPhase.DOWNLOADING -> {
-                            if (isWorkshop && !statusMessage.isNullOrBlank()) {
-                                statusMessage!!
-                            } else {
-                                val filePart = currentFile?.let { " [${it.take(10)}]" } ?: ""
-                                "Downloading...$filePart"
-                            }
+                            val filePart = currentFile?.let { " [${it.take(10)}]" } ?: ""
+                            "Downloading...$filePart"
                         }
                         DownloadPhase.PAUSED -> stringResource(R.string.downloads_queue_phase_paused)
-                        DownloadPhase.PREPARING -> statusMessage ?: "Preparing..."
+                        DownloadPhase.PREPARING -> "Preparing..."
                         DownloadPhase.VERIFYING -> {
                             val filePart = currentFile?.let { " [${it.take(10)}]" } ?: ""
                             "Verifying...$filePart"
                         }
-                        DownloadPhase.PATCHING -> statusMessage ?: "Patching..."
-                        DownloadPhase.APPLYING_DATA -> statusMessage ?: "Applying data..."
-                        DownloadPhase.FINALIZING -> statusMessage ?: "Finalizing..."
-                        DownloadPhase.UNPACKING -> statusMessage ?: "Unpacking..."
+                        DownloadPhase.PATCHING -> "Patching..."
                         DownloadPhase.COMPLETE -> stringResource(R.string.downloads_queue_phase_complete)
                         DownloadPhase.CANCELLED -> stringResource(R.string.downloads_queue_phase_cancelled)
                         DownloadPhase.FAILED -> stringResource(R.string.downloads_queue_phase_failed, if (statusMessage != null && statusMessage != "null") statusMessage!! else stringResource(R.string.common_ui_unknown_error))
@@ -5275,7 +5219,6 @@ class UnifiedActivity : ComponentActivity() {
 
         if (showDeleteDialog) {
             val gameName = if (id.startsWith("STEAM_")) steamApp?.name
-                else if (id.startsWith("WORKSHOP_")) steamApp?.name?.let { "$it Workshop" }
                 else if (id.startsWith("EPIC_")) epicGame?.title
                 else if (id.startsWith("GOG_")) gogGame?.title
                 else null
@@ -5678,150 +5621,6 @@ class UnifiedActivity : ComponentActivity() {
         return requestPinnedHomeShortcut(context, shortcut, artworkModel)
     }
 
-    private fun resolveSteamContainerForApp(
-        context: android.content.Context,
-        containerManager: ContainerManager,
-        app: SteamApp
-    ): com.winlator.cmod.container.Container? {
-        val shortcut = findLibraryShortcutForGame(containerManager, app, false, false, 0)
-        val container = shortcut?.container ?: SetupWizardActivity.getPreferredGameContainer(context, containerManager)
-        if (container == null) {
-            SetupWizardActivity.promptToInstallWineOrCreateContainer(context)
-            return null
-        }
-        if (!SetupWizardActivity.isContainerUsable(context, container)) {
-            SetupWizardActivity.promptToInstallWineOrCreateContainer(context, container.wineVersion)
-            return null
-        }
-        return container
-    }
-
-    private suspend fun persistWorkshopSelection(
-        context: android.content.Context,
-        app: SteamApp,
-        enabledIds: Set<Long>
-    ): Result<String> = runCatching {
-        val containerManager = ContainerManager(context)
-        val container = resolveSteamContainerForApp(context, containerManager, app)
-            ?: throw IllegalStateException("No usable container available for Steam Workshop")
-
-        val enabledIdsCsv = enabledIds.sorted().joinToString(",")
-        withContext(Dispatchers.IO) {
-            if (enabledIds.isEmpty()) {
-                db.steamAppDao().clearWorkshopState(app.id)
-                WorkshopManager.deleteWorkshopMods(
-                    appId = app.id,
-                    container = container,
-                    gameRootDir = java.io.File(SteamService.getAppDirPath(app.id)),
-                    gameName = app.name,
-                    developerName = app.developer,
-                )
-                "Workshop mods removed"
-            } else {
-                db.steamAppDao().updateWorkshopState(app.id, true, enabledIdsCsv)
-                WorkshopDownloadRegistry.runTrackedSync(
-                    appId = app.id,
-                    gameName = app.name,
-                ) { downloadInfo ->
-                    var lastDownloadedBytes = 0L
-                    runCatching {
-                        WorkshopManager.syncSelectedItems(
-                            context = context,
-                            appId = app.id,
-                            enabledIds = enabledIds,
-                            container = container,
-                            gameRootDir = java.io.File(SteamService.getAppDirPath(app.id)),
-                            gameName = app.name,
-                            developerName = app.developer,
-                            onStatus = { status ->
-                                val phase = DownloadPhase.fromMessage(status) ?: when {
-                                    status.contains("decompress", ignoreCase = true) -> DownloadPhase.UNPACKING
-                                    status.contains("processing", ignoreCase = true) -> DownloadPhase.APPLYING_DATA
-                                    status.contains("configuring", ignoreCase = true) -> DownloadPhase.FINALIZING
-                                    else -> DownloadPhase.PREPARING
-                                }
-                                downloadInfo.updateStatus(phase, status)
-                                downloadInfo.updateStatusMessage(status)
-                                when (phase) {
-                                    DownloadPhase.DOWNLOADING,
-                                    DownloadPhase.VERIFYING,
-                                    DownloadPhase.PATCHING,
-                                    DownloadPhase.APPLYING_DATA,
-                                    DownloadPhase.UNPACKING,
-                                    DownloadPhase.FINALIZING,
-                                    DownloadPhase.PREPARING -> {
-                                        val detail = status.substringAfter("Downloading ", "").substringBeforeLast(" (")
-                                        if (detail.isNotBlank() && detail != status) {
-                                            downloadInfo.updateCurrentFileName(detail)
-                                        }
-                                    }
-                                    else -> Unit
-                                }
-                            },
-                            onBytesProgress = { downloaded, total ->
-                                downloadInfo.setTotalExpectedBytes(total.coerceAtLeast(0L))
-                                val delta = downloaded - lastDownloadedBytes
-                                if (delta >= 0L) {
-                                    downloadInfo.updateBytesDownloaded(delta)
-                                } else {
-                                    downloadInfo.initializeBytesDownloaded(downloaded.coerceAtLeast(0L))
-                                }
-                                downloadInfo.setProgress(
-                                    if (total > 0L) {
-                                        (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-                                    } else {
-                                        0f
-                                    },
-                                )
-                                lastDownloadedBytes = downloaded.coerceAtLeast(0L)
-                            },
-                        ).let { syncResult ->
-                            if (syncResult.downloadedCount > 0) {
-                                "Workshop updated: ${syncResult.downloadedCount} item(s) downloaded"
-                            } else {
-                                "Workshop updated"
-                            }
-                        }
-                    }.map { message ->
-                        downloadInfo.updateCurrentFileName(null)
-                        message
-                    }
-                }.getOrThrow()
-            }
-        }
-    }
-
-    private suspend fun prepareSteamWorkshopForLaunch(
-        context: android.content.Context,
-        app: SteamApp,
-        container: com.winlator.cmod.container.Container,
-        gameInstallPath: String
-    ) {
-        val enabledIds = WorkshopManager.parseEnabledIds(app.enabledWorkshopItemIds)
-        if (!app.workshopMods || enabledIds.isEmpty()) return
-
-        runCatching {
-            withContext(Dispatchers.IO) {
-                WorkshopManager.syncSelectedItems(
-                    context = context,
-                    appId = app.id,
-                    enabledIds = enabledIds,
-                    container = container,
-                    gameRootDir = java.io.File(gameInstallPath),
-                    gameName = app.name,
-                    developerName = app.developer,
-                )
-            }
-        }.onFailure { error ->
-            android.util.Log.w("UnifiedActivity", "Steam Workshop preparation failed for ${app.id}", error)
-            android.widget.Toast.makeText(
-                context,
-                "Workshop sync failed, launching game anyway.",
-                android.widget.Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
-
     // Game launch with A: drive mounting
     private fun launchSteamGame(context: android.content.Context, containerManager: ContainerManager, app: SteamApp) {
         val gameInstallPath = SteamService.getAppDirPath(app.id)
@@ -5837,9 +5636,6 @@ class UnifiedActivity : ComponentActivity() {
         }
 
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-            val freshApp = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                db.steamAppDao().findApp(app.id) ?: app
-            }
             val launchExecutable = withContext(kotlinx.coroutines.Dispatchers.IO) {
                 SteamService.getInstalledExe(app.id)
             }
@@ -5868,7 +5664,6 @@ class UnifiedActivity : ComponentActivity() {
                 }
                 // Existing shortcut: mount A: drive to game install path on its container
                 mountADrive(shortcut!!.container, gameInstallPath)
-                prepareSteamWorkshopForLaunch(context, freshApp, shortcut!!.container, gameInstallPath)
                 shortcut!!.putExtra("game_source", "STEAM")
                 shortcut!!.putExtra("game_install_path", gameInstallPath)
                 shortcut!!.putExtra("launch_exe_path", launchExecutable)
@@ -5903,7 +5698,6 @@ class UnifiedActivity : ComponentActivity() {
                 }
 
                 mountADrive(container, gameInstallPath)
-                prepareSteamWorkshopForLaunch(context, freshApp, container, gameInstallPath)
 
                 val execPath = "wine \"C:\\\\Program Files (x86)\\\\Steam\\\\steamclient_loader_x64.exe\""
 

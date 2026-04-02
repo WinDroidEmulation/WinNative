@@ -141,12 +141,6 @@ data class SteamApp(
 
     @ColumnInfo("ufs")
     val ufs: UFS = UFS(),
-
-    @ColumnInfo(name = "workshop_mods", defaultValue = "0")
-    val workshopMods: Boolean = false,
-
-    @ColumnInfo(name = "enabled_workshop_item_ids", defaultValue = "")
-    val enabledWorkshopItemIds: String = "",
 ) {
     companion object {
         const val STEAM_URL = "https://shared.steamstatic.com/store_item_assets/steam/apps"

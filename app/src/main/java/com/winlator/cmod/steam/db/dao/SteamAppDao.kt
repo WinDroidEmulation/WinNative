@@ -70,16 +70,4 @@ interface SteamAppDao {
 
     @Query("SELECT * FROM steam_app")
     suspend fun getAllAsList(): List<SteamApp>
-
-    @Query("UPDATE steam_app SET workshop_mods = :workshopMods, enabled_workshop_item_ids = :enabledIds WHERE id = :appId")
-    suspend fun updateWorkshopState(appId: Int, workshopMods: Boolean, enabledIds: String)
-
-    @Query("SELECT workshop_mods FROM steam_app WHERE id = :appId")
-    suspend fun getWorkshopMods(appId: Int): Boolean?
-
-    @Query("SELECT enabled_workshop_item_ids FROM steam_app WHERE id = :appId")
-    suspend fun getEnabledWorkshopItemIds(appId: Int): String?
-
-    @Query("UPDATE steam_app SET workshop_mods = 0, enabled_workshop_item_ids = '' WHERE id = :appId")
-    suspend fun clearWorkshopState(appId: Int)
 }

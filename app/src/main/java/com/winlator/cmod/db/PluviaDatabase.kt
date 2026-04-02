@@ -41,7 +41,7 @@ const val DATABASE_NAME = "pluvia_database"
         com.winlator.cmod.gog.data.GOGGame::class,
         DownloadingAppInfo::class
     ],
-    version = 4,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(
