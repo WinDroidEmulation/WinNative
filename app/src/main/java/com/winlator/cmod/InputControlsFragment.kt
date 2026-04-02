@@ -19,6 +19,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.FrameLayout
@@ -479,11 +480,19 @@ class InputControlsFragment(private val selectedProfileId: Int) : Fragment() {
         }
         listView.adapter = adapter
         listView.visibility = View.VISIBLE
+
+        var pendingProfile: ControlsProfile? = null
         listView.setOnItemClickListener { _, _, position, _ ->
             adapter.select(position)
+            pendingProfile = profiles[position]
             dialog.dismiss()
-            onProfileSelected(profiles[position])
         }
+
+        dialog.setOnDismissListener {
+            pendingProfile?.let { onProfileSelected(it) }
+        }
+
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         dialog.setTitle(R.string.input_controls_editor_select_profile)
         dialog.show()
     }
