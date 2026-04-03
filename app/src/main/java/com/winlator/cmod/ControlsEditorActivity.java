@@ -119,7 +119,7 @@ public class ControlsEditorActivity extends AppCompatActivity implements View.On
             @Override
             public View getView(int position, View convertView, ViewGroup parent) {
                 View colorView = new View(parent.getContext());
-                int size = (int)UnitUtils.dpToPx(32);
+                int size = (int)UnitUtils.dpToPx(28);
                 colorView.setLayoutParams(new GridView.LayoutParams(size, size));
                 colorView.setBackgroundColor(colors[position]);
                 colorView.setOnClickListener(v -> {
