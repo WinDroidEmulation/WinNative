@@ -269,6 +269,11 @@ class UnifiedActivity : AppCompatActivity() {
     companion object {
         private const val MOVE_INTERVAL_MS = 250L
         const val OPEN_IMAGE_REQUEST_CODE = 5
+        private var instance: UnifiedActivity? = null
+
+        fun refreshLibrary() {
+            instance?.let { it.libraryRefreshSignal++ }
+        }
     }
 
     private fun moveLibraryFocus(left: Boolean, right: Boolean, up: Boolean, down: Boolean) {
@@ -596,6 +601,7 @@ class UnifiedActivity : AppCompatActivity() {
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        instance = this
         super.onCreate(savedInstanceState)
         supportFragmentManager.registerFragmentLifecycleCallbacks(inputControlsFragmentTracker, true)
         db = PluviaDatabase.getInstance(this)
@@ -1578,16 +1584,36 @@ class UnifiedActivity : AppCompatActivity() {
                     val cm = ContainerManager(context)
                     val allShortcuts = cm.loadShortcuts()
                     val apps = allShortcuts
-                        .filter { it.getExtra("game_source") == "CUSTOM" }
                         .map { shortcut ->
-                            val displayName = shortcut.getExtra("custom_name", shortcut.name)
-                            val customId = -(displayName.hashCode().and(0x7FFFFFFF) + 1)
+                            val gameSource = shortcut.getExtra("game_source", "CUSTOM")
+                            val displayName = if (gameSource == "CUSTOM") shortcut.getExtra("custom_name", shortcut.name) else shortcut.name
+                            val steamId = shortcut.getExtra("app_id", "0").toIntOrNull() ?: 0
+                            
+                            val isOfficialSteam = steamId > 0 && steamApps.any { it.id == steamId }
+                            val isOfficialEpic = gameSource == "EPIC" && epicApps.any { it.id.toString() == shortcut.getExtra("app_id") }
+                            val isOfficialGog = gameSource == "GOG" && gogApps.any { it.id == shortcut.getExtra("gog_id") }
+
+                            val customId = if (gameSource == "STEAM" && !isOfficialSteam) {
+                                -(displayName.hashCode().and(0x7FFFFFFF) + 1)
+                            } else if (gameSource == "STEAM") {
+                                steamId
+                            } else {
+                                -(displayName.hashCode().and(0x7FFFFFFF) + 1)
+                            }
+                            
                             SteamApp(
                                 id = customId,
                                 name = displayName,
-                                developer = "Custom",
-                                gameDir = shortcut.getExtra("custom_game_folder", "")
+                                developer = if (gameSource == "CUSTOM") "Custom" else gameSource,
+                                gameDir = shortcut.getExtra("game_install_path", shortcut.getExtra("custom_game_folder", ""))
                             )
+                        }
+                        .filter { app -> 
+                            // Only include as 'customApps' if it's not already handled by official Steam/Epic/Gog lists
+                            val isOfficial = (app.id > 0 && steamApps.any { it.id == app.id }) ||
+                                            epicApps.any { it.title == app.name } ||
+                                            gogApps.any { it.title == app.name }
+                            !isOfficial || app.id < 0
                         }
                     withContext(Dispatchers.Main) {
                         cachedShortcuts = allShortcuts
@@ -2166,17 +2192,7 @@ class UnifiedActivity : AppCompatActivity() {
                         val zos = java.util.zip.ZipOutputStream(java.io.BufferedOutputStream(os))
 
                         val containerManager = com.winlator.cmod.container.ContainerManager(context)
-                        val shortcut = when {
-                            isCustom -> containerManager.loadShortcuts().find {
-                                it.getExtra("game_source") == "CUSTOM" && (it.getExtra("custom_name") == app.name || it.name == app.name)
-                            }
-                            isEpic -> containerManager.loadShortcuts().find {
-                                it.getExtra("game_source") == "EPIC" && it.getExtra("app_id") == epicId.toString()
-                            }
-                            else -> containerManager.loadShortcuts().find {
-                                it.getExtra("app_id") == app.id.toString()
-                            }
-                        }
+                        val shortcut = findLibraryShortcutForGame(containerManager, app, isCustom, isEpic, epicId)
                         
                         val dirsToZip = mutableListOf<java.io.File>()
                         
@@ -2252,17 +2268,7 @@ class UnifiedActivity : AppCompatActivity() {
                         val zis = java.util.zip.ZipInputStream(java.io.BufferedInputStream(`is`))
                         
                         val containerManager = com.winlator.cmod.container.ContainerManager(context)
-                        val shortcut = when {
-                            isCustom -> containerManager.loadShortcuts().find {
-                                it.getExtra("game_source") == "CUSTOM" && (it.getExtra("custom_name") == app.name || it.name == app.name)
-                            }
-                            isEpic -> containerManager.loadShortcuts().find {
-                                it.getExtra("game_source") == "EPIC" && it.getExtra("app_id") == epicId.toString()
-                            }
-                            else -> containerManager.loadShortcuts().find {
-                                it.getExtra("app_id") == app.id.toString()
-                            }
-                        }
+                        val shortcut = findLibraryShortcutForGame(containerManager, app, isCustom, isEpic, epicId)
                         
                         val goldbergSavesParent = java.io.File(if (isEpic) app.gameDir else SteamService.getAppDirPath(app.id), if (isEpic) "" else "steam_settings")
                         val prefixDir = shortcut?.let { java.io.File(it.container.getRootDir(), ".wine/drive_c/users/xuser") }
@@ -2493,11 +2499,12 @@ class UnifiedActivity : AppCompatActivity() {
                             if (isCustom) {
                                 scope.launch(Dispatchers.IO) {
                                     val cm = ContainerManager(context)
-                                    val sc = cm.loadShortcuts().find {
-                                        it.getExtra("game_source") == "CUSTOM" &&
-                                            (it.getExtra("custom_name") == app.name || it.name == app.name)
+                                    val sc = findLibraryShortcutForGame(cm, app, isCustom, isEpic, epicId)
+                                    sc?.file?.let {
+                                        it.delete()
+                                        val lnkFile = java.io.File(it.path.substringBeforeLast(".") + ".lnk")
+                                        if (lnkFile.exists()) lnkFile.delete()
                                     }
-                                    sc?.file?.delete()
                                     java.io.File(context.filesDir, "custom_icons/${app.name.replace("/", "_")}.png").delete()
                                     PluviaApp.events.emit(AndroidEvent.LibraryInstallStatusChanged(app.id))
                                     withContext(Dispatchers.Main) {
@@ -2828,20 +2835,7 @@ class UnifiedActivity : AppCompatActivity() {
                         val os = context.contentResolver.openOutputStream(uri) ?: return@launch
                         val zos = java.util.zip.ZipOutputStream(java.io.BufferedOutputStream(os))
                         val containerManager = ContainerManager(context)
-                        val shortcut = when {
-                            isGog -> containerManager.loadShortcuts().find {
-                                it.getExtra("game_source") == "GOG" && it.getExtra("gog_id") == gogGame!!.id
-                            }
-                            isCustom -> containerManager.loadShortcuts().find {
-                                it.getExtra("game_source") == "CUSTOM" && (it.getExtra("custom_name") == app.name || it.name == app.name)
-                            }
-                            isEpic -> containerManager.loadShortcuts().find {
-                                it.getExtra("game_source") == "EPIC" && it.getExtra("app_id") == epicId.toString()
-                            }
-                            else -> containerManager.loadShortcuts().find {
-                                it.getExtra("app_id") == app.id.toString()
-                            }
-                        }
+                        val shortcut = findLibraryShortcutForGame(containerManager, app, isCustom, isEpic, epicId)
                         val dirsToZip = mutableListOf<java.io.File>()
                         val goldbergSaves = java.io.File(SteamService.getAppDirPath(app.id), "steam_settings/saves")
                         if (goldbergSaves.exists() && goldbergSaves.isDirectory) dirsToZip.add(goldbergSaves)
@@ -2891,20 +2885,7 @@ class UnifiedActivity : AppCompatActivity() {
                         val inputStream = context.contentResolver.openInputStream(uri) ?: return@launch
                         val zis = java.util.zip.ZipInputStream(java.io.BufferedInputStream(inputStream))
                         val containerManager = ContainerManager(context)
-                        val shortcut = when {
-                            isGog -> containerManager.loadShortcuts().find {
-                                it.getExtra("game_source") == "GOG" && it.getExtra("gog_id") == gogGame!!.id
-                            }
-                            isCustom -> containerManager.loadShortcuts().find {
-                                it.getExtra("game_source") == "CUSTOM" && (it.getExtra("custom_name") == app.name || it.name == app.name)
-                            }
-                            isEpic -> containerManager.loadShortcuts().find {
-                                it.getExtra("game_source") == "EPIC" && it.getExtra("app_id") == epicId.toString()
-                            }
-                            else -> containerManager.loadShortcuts().find {
-                                it.getExtra("app_id") == app.id.toString()
-                            }
-                        }
+                        val shortcut = findLibraryShortcutForGame(containerManager, app, isCustom, isEpic, epicId)
                         val goldbergSavesParent = java.io.File(
                             if (isEpic) app.gameDir else SteamService.getAppDirPath(app.id),
                             if (isEpic) "" else "steam_settings"
@@ -3377,10 +3358,12 @@ class UnifiedActivity : AppCompatActivity() {
                                             } else if (isCustom) {
                                                 scope.launch(Dispatchers.IO) {
                                                     val cm = ContainerManager(context)
-                                                    val sc = cm.loadShortcuts().find {
-                                                        it.getExtra("game_source") == "CUSTOM" && (it.getExtra("custom_name") == app.name || it.name == app.name)
-                                                    }
-                                                    sc?.file?.delete()
+                                                    val sc = findLibraryShortcutForGame(cm, app, isCustom, isEpic, epicId)
+                                                    sc?.file?.let {
+                                        it.delete()
+                                        val lnkFile = java.io.File(it.path.substringBeforeLast(".") + ".lnk")
+                                        if (lnkFile.exists()) lnkFile.delete()
+                                    }
                                                     java.io.File(context.filesDir, "custom_icons/${app.name.replace("/", "_")}.png").delete()
                                                     PluviaApp.events.emit(AndroidEvent.LibraryInstallStatusChanged(app.id))
                                                     withContext(Dispatchers.Main) {
@@ -5617,14 +5600,11 @@ class UnifiedActivity : AppCompatActivity() {
         epicId: Int
     ): Shortcut? {
         return when {
-            isCustom -> shortcuts.find {
-                it.getExtra("game_source") == "CUSTOM" && (it.getExtra("custom_name") == app.name || it.name == app.name)
-            }
             isEpic -> shortcuts.find {
                 it.getExtra("game_source") == "EPIC" && it.getExtra("app_id") == epicId.toString()
             }
             else -> shortcuts.find {
-                it.getExtra("app_id") == app.id.toString()
+                it.getExtra("app_id") == app.id.toString() || it.getExtra("custom_name") == app.name || it.name == app.name
             }
         }
     }
@@ -6313,12 +6293,12 @@ class UnifiedActivity : AppCompatActivity() {
     // Launch custom game by shortcut name
     private fun launchCustomGame(context: android.content.Context, containerManager: ContainerManager, gameName: String) {
         val allShortcuts = containerManager.loadShortcuts()
-        val customShortcuts = allShortcuts.filter { it.getExtra("game_source") == "CUSTOM" }
 
-        // Try matching by custom_name extra first, then fall back to shortcut.name (filename)
-        var shortcut = customShortcuts.find { it.getExtra("custom_name") == gameName }
-            ?: customShortcuts.find { it.name == gameName }
-            ?: customShortcuts.find { it.name == gameName.replace("/", "_").replace("\\", "_") }
+        // Try matching by app_id (for non-official Steam/Epic), custom_name, or filename
+        var shortcut = allShortcuts.find { it.getExtra("app_id") == gameName }
+            ?: allShortcuts.find { it.getExtra("custom_name") == gameName }
+            ?: allShortcuts.find { it.name == gameName }
+            ?: allShortcuts.find { it.name == gameName.replace("/", "_").replace("\\", "_") }
 
         // If still not found, try matching by looking at the safe filename directly
         if (shortcut == null) {

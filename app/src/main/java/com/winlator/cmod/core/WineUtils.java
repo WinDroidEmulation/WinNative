@@ -801,4 +801,17 @@ public abstract class WineUtils {
         }
         return new File(imageFs.getRootDir(), path);
     }
+
+    public static String getDosPath(String path) {
+        if (path == null || path.isEmpty()) return "D:\\";
+        String downloadsPath = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).getAbsolutePath();
+        String externalStoragePath = android.os.Environment.getExternalStorageDirectory().getAbsolutePath();
+
+        if (path.startsWith(downloadsPath)) {
+            return "D:" + path.substring(downloadsPath.length()).replace("/", "\\");
+        } else if (path.startsWith(externalStoragePath)) {
+            return "F:" + path.substring(externalStoragePath.length()).replace("/", "\\");
+        }
+        return "D:\\"; // fallback
+    }
 }

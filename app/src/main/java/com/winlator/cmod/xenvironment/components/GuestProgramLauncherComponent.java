@@ -24,7 +24,6 @@ import com.winlator.cmod.core.KeyValueSet;
 import com.winlator.cmod.core.ProcessHelper;
 import com.winlator.cmod.core.TarCompressorUtils;
 import com.winlator.cmod.core.WineInfo;
-import com.winlator.cmod.core.WineUtils;
 import com.winlator.cmod.fexcore.FEXCoreManager;
 import com.winlator.cmod.fexcore.FEXCorePreset;
 import com.winlator.cmod.fexcore.FEXCorePresetManager;
@@ -155,7 +154,10 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         ImageFs imageFs = ImageFs.find(context);
         File rootDir = imageFs.getRootDir();
         StringBuilder output = new StringBuilder();
-        EnvVars envVars = new EnvVars();
+
+        // Use the instance envVars if available, otherwise new
+        EnvVars envVars = (this.envVars != null) ? new EnvVars(this.envVars.toString()) : new EnvVars();
+        
         envVars.put("HOME", imageFs.home_path);
         envVars.put("USER", ImageFs.USER);
         envVars.put("TMPDIR", imageFs.getRootDir().getPath() + "/tmp");

@@ -1193,44 +1193,24 @@ class ShortcutSettingsComposeDialog private constructor(
 
     private fun addShortcutToScreen(shortcut: Shortcut): Boolean {
         if (shortcut.getExtra("uuid").isEmpty()) shortcut.genUUID()
-        val shortcutId = shortcut.getExtra("uuid")
-        if (shortcutId.isEmpty()) return false
-        val canonicalShortcutPath = shortcut.file.absolutePath
-        val shortcutPathHash = canonicalShortcutPath.hashCode()
         val shortcutManager = context.getSystemService(ShortcutManager::class.java)
             ?: return false
         if (!shortcutManager.isRequestPinShortcutSupported) return false
-
-        val shortcutIcon = if (shortcut.icon != null)
-            Icon.createWithBitmap(shortcut.icon)
+        val shortcutIcon = if (shortcut.icon != null) Icon.createWithBitmap(shortcut.icon)
         else Icon.createWithResource(context, R.drawable.icon_shortcut)
 
         val intent = Intent(context, XServerDisplayActivity::class.java).apply {
-            val containerIdForLaunch = shortcut.getExtra("container_id").toIntOrNull() ?: shortcut.container.id
-            val launchData = android.net.Uri.Builder()
-                .scheme("winnative")
-                .authority(BuildConfig.APPLICATION_ID)
-                .appendPath("shortcut")
-                .appendQueryParameter("uuid", shortcutId)
-                .appendQueryParameter("container", containerIdForLaunch.toString())
-                .appendQueryParameter("hash", shortcutPathHash.toString())
-                .build()
             action = Intent.ACTION_VIEW
-            data = launchData
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra("container_id", containerIdForLaunch)
-            putExtra("shortcut_path", canonicalShortcutPath)
-            putExtra("shortcut_name", shortcut.name)
-            putExtra("shortcut_uuid", shortcutId)
-            putExtra("shortcut_path_hash", shortcutPathHash)
+            putExtra("container_id", shortcut.container.id)
+            putExtra("shortcut_path", shortcut.file.path)
         }
-        val pinShortcutId = "shortcut_${shortcut.container.id}_${shortcutId}_${shortcutPathHash.toUInt().toString(16)}"
-        val info = ShortcutInfo.Builder(context, pinShortcutId)
+        val info = ShortcutInfo.Builder(context, shortcut.getExtra("uuid"))
             .setShortLabel(shortcut.name)
             .setLongLabel(shortcut.name)
             .setIcon(shortcutIcon)
             .setIntent(intent)
             .build()
+
         return shortcutManager.requestPinShortcut(info, null)
     }
 
@@ -1355,7 +1335,7 @@ class ShortcutSettingsComposeDialog private constructor(
         val syncFrame = if (state.gfxSyncFrame.value) "1" else "0"
         val disablePresentWait = if (state.gfxDisablePresentWait.value) "1" else "0"
         val resourceType = state.gfxResourceTypeEntries.value.getOrElse(state.gfxSelectedResourceType.intValue) { "auto" }
-        val bcnEmulation = state.gfxBcnEmulationEntries.value.getOrElse(state.gfxSelectedBcnEmulation.intValue) { "none" }
+        val bcnEmulation = state.gfxBcnEmulationEntries.value.getOrElse(state.gfxSelectedBcnEmulation.intValue) { "auto" }
         val bcnEmulationType = state.gfxBcnEmulationTypeEntries.value.getOrElse(state.gfxSelectedBcnEmulationType.intValue) { "compute" }
         val bcnEmulationCache = state.gfxBcnEmulationCacheEntries.value.getOrElse(state.gfxSelectedBcnEmulationCache.intValue) { "0" }
 
@@ -1953,7 +1933,7 @@ class ShortcutSettingsComposeDialog private constructor(
             val exec = if (source == "STEAM") {
                 "wine \"C:\\\\Program Files (x86)\\\\Steam\\\\steamclient_loader_x64.exe\""
             } else {
-                "wine \"explorer.exe\""
+                "wine \"D:\\\\\""
             }
             val sb = StringBuilder()
             sb.append("[Desktop Entry]\n")

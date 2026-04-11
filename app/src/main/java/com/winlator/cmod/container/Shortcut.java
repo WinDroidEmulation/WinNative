@@ -1,4 +1,4 @@
-    package com.winlator.cmod.container;
+package com.winlator.cmod.container;
 
     import android.graphics.Bitmap;
     import android.graphics.BitmapFactory;
@@ -17,6 +17,9 @@ import java.nio.file.Files;
     import java.util.Iterator;
     import java.util.List;
     import java.util.UUID;
+
+import com.winlator.cmod.xenvironment.ImageFs;
+import com.winlator.cmod.utils.PeIconExtractor;
 
     public class Shortcut {
         public final Container container;
@@ -92,11 +95,11 @@ import java.nio.file.Files;
             if (path.startsWith("\"") && path.endsWith("\"")) path = path.substring(1, path.length() - 1);
             path = StringUtils.unescape(path);
             
-            // Normalize DOS paths like A:game.exe to A:\game.exe
+            // Normalize DOS paths like D:game.exe to D:\game.exe
             if (path != null && path.matches("^[A-Z]:[^\\\\/].*")) {
                 path = path.substring(0, 2) + "\\" + path.substring(2);
             }
-            // If it's just "A:", make it "A:\"
+            // If it's just "D:", make it "D:\"
             if (path != null && path.matches("^[A-Z]:$")) {
                 path = path + "\\";
             }
@@ -113,16 +116,57 @@ import java.nio.file.Files;
         }
 
         private void loadCoverArt() {
-            // Check for custom cover art first
+            // 1. Check if we already have a saved path in the metadata
             if (customCoverArtPath != null && !customCoverArtPath.isEmpty()) {
                 File customCoverArtFile = new File(customCoverArtPath);
                 if (customCoverArtFile.isFile()) {
                     this.coverArt = BitmapFactory.decodeFile(customCoverArtFile.getPath());
-                    return; // Exit if custom cover art is loaded
+                    return;
                 }
             }
 
-            // Fallback to standard cover art location
+            // 2. Check the "custom_icons" folder (This is where manual imports save their icons)
+            String safeName = this.name.replace("/", "_").replace("\\", "_");
+            File customIconFile = new File(container.getManager().getContext().getFilesDir(), "custom_icons/" + safeName + ".png");
+            if (customIconFile.exists()) {
+                this.coverArt = BitmapFactory.decodeFile(customIconFile.getPath());
+                this.customCoverArtPath = customIconFile.getAbsolutePath();
+                return;
+            }
+
+            // 3. SMART AUTO-DISCOVERY
+            // We use the EXE path (this.path) to find the game on your Android storage
+            ImageFs imageFs = ImageFs.find(container.getManager().getContext());
+            File exeFile = com.winlator.cmod.core.WineUtils.getNativePath(imageFs, this.path);
+            
+            if (exeFile != null && exeFile.exists()) {
+                // A. Try extracting the real high-quality icon from the EXE
+                if (PeIconExtractor.INSTANCE.extractAndSave(exeFile, customIconFile)) {
+                    this.coverArt = BitmapFactory.decodeFile(customIconFile.getPath());
+                    this.customCoverArtPath = customIconFile.getAbsolutePath();
+                    putExtra("customCoverArtPath", customCoverArtPath);
+                    saveData(); // Save it to the file so we don't have to extract it again
+                    return;
+                }
+
+                // B. Fallback: If the EXE has no icon, scan the game folder for any .jpg or .png
+                File gameDir = exeFile.isDirectory() ? exeFile : exeFile.getParentFile();
+                if (gameDir != null && gameDir.exists()) {
+                    File[] candidates = gameDir.listFiles((dir, name) -> {
+                        String lower = name.toLowerCase();
+                        return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png");
+                    });
+                    if (candidates != null && candidates.length > 0) {
+                        this.customCoverArtPath = candidates[0].getAbsolutePath();
+                        this.coverArt = BitmapFactory.decodeFile(customCoverArtPath);
+                        putExtra("customCoverArtPath", customCoverArtPath);
+                        saveData();
+                        return;
+                    }
+                }
+            }
+
+            // 4. Final Fallback: standard cover art location
             File defaultCoverArtFile = new File(COVER_ART_DIR, this.name + ".png");
             if (defaultCoverArtFile.isFile()) {
                 this.coverArt = BitmapFactory.decodeFile(defaultCoverArtFile.getPath());
@@ -205,6 +249,15 @@ import java.nio.file.Files;
             }
 
             FileUtils.writeString(file, content);
+
+            // Notify the app that a shortcut was added/updated
+            if (container != null && container.getManager() != null && container.getManager().getContext() != null) {
+                android.content.Context context = container.getManager().getContext();
+                android.content.Intent intent = new android.content.Intent(context.getPackageName() + ".SHORTCUT_ADDED");
+                intent.putExtra("shortcut_path", file.getPath());
+                intent.putExtra("shortcut_added", true);
+                context.sendBroadcast(intent);
+            }
         }
 
 

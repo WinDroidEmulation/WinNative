@@ -109,8 +109,8 @@ public final class GameFixes {
         }
 
         File systemRegFile = new File(container.getRootDir(), ".wine/system.reg");
-        String installPathWindows = WineUtils.getDriveCGameWindowsPath(container, "STEAM", installPath, installPath);
-        applyFix(fix, appId, installPath, installPathWindows != null ? installPathWindows : "C:\\", systemRegFile);
+        String installPathWindows = WineUtils.getDosPath(installPath);
+        applyFix(fix, appId, installPath, installPathWindows != null ? installPathWindows : "D:\\", systemRegFile);
     }
 
     private static void applyGogFixes(Container container, Shortcut shortcut) {
@@ -145,8 +145,8 @@ public final class GameFixes {
         }
 
         File systemRegFile = new File(container.getRootDir(), ".wine/system.reg");
-        String installPathWindows = WineUtils.getDriveCGameWindowsPath(container, "EPIC", installPath, installPath);
-        applyFix(fix, catalogId, installPath, installPathWindows != null ? installPathWindows : "C:\\", systemRegFile);
+        String installPathWindows = WineUtils.getDosPath(installPath);
+        applyFix(fix, catalogId, installPath, installPathWindows != null ? installPathWindows : "D:\\", systemRegFile);
     }
 
     private static void applyFix(Fix fix, String gameId, String installPath, String installPathWindows, File systemRegFile) {
@@ -166,8 +166,8 @@ public final class GameFixes {
     private static ResolvedPaths resolveGogPaths(Container container, Shortcut shortcut, String gogId) {
         String shortcutInstallPath = shortcut.getExtra("game_install_path");
         if (isUsableInstallDir(shortcutInstallPath)) {
-            String installPathWindows = WineUtils.getDriveCGameWindowsPath(container, "GOG", shortcutInstallPath, shortcutInstallPath);
-            return new ResolvedPaths(shortcutInstallPath, installPathWindows != null ? installPathWindows : "C:\\");
+            String installPathWindows = WineUtils.getDosPath(shortcutInstallPath);
+            return new ResolvedPaths(shortcutInstallPath, installPathWindows != null ? installPathWindows : "D:\\");
         }
 
         GOGGame gogGame = GOGService.Companion.getGOGGameOf(gogId);
@@ -194,8 +194,8 @@ public final class GameFixes {
             shortcut.saveData();
         }
 
-        String installPathWindows = WineUtils.getDriveCGameWindowsPath(container, "GOG", installPath, installPath);
-        return new ResolvedPaths(installPath, installPathWindows != null ? installPathWindows : "C:\\");
+        String installPathWindows = WineUtils.getDosPath(installPath);
+        return new ResolvedPaths(installPath, installPathWindows != null ? installPathWindows : "D:\\");
     }
 
     private static boolean isUsableInstallDir(String path) {

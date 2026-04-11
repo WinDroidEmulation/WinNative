@@ -13,6 +13,8 @@ import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
+import com.winlator.cmod.utils.PeIconExtractor;
+
 public abstract class MSLink {
     public static final byte SW_SHOWNORMAL = 1;
     public static final byte SW_SHOWMAXIMIZED = 3;
@@ -210,17 +212,53 @@ public abstract class MSLink {
 
     public static void createDesktopFile(File lnkFile, Context context) {
         String lnkFilePath = lnkFile.getPath();
-        String filePath = StringUtils.escapeFileDOSPath(parseFilePath(lnkFile));
+        String windowsPath = parseFilePath(lnkFile);
+        String filePath = StringUtils.escapeFileDOSPath(windowsPath);
         ImageFs imageFs = ImageFs.find(context);
 
+        // Smart Discovery: Try extracting the real EXE icon first
+        String customLibraryIconPath = "";
+        File exeFile = WineUtils.getNativePath(imageFs, windowsPath);
+        if (exeFile != null && exeFile.exists()) {
+            String safeName = lnkFile.getName().substring(0, lnkFile.getName().lastIndexOf(".")).replace("/", "_").replace("\\", "_");
+            File iconOutFile = new File(context.getFilesDir(), "custom_icons/" + safeName + ".png");
+            
+            // 1. Try extracting from EXE
+            if (PeIconExtractor.INSTANCE.extractAndSave(exeFile, iconOutFile)) {
+                customLibraryIconPath = iconOutFile.getAbsolutePath();
+            } else {
+                // 2. Fallback: Scan game folder for image extensions
+                File gameDir = exeFile.isDirectory() ? exeFile : exeFile.getParentFile();
+                if (gameDir != null && gameDir.exists()) {
+                    File[] candidates = gameDir.listFiles((dir, name) -> {
+                        String lower = name.toLowerCase();
+                        return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png");
+                    });
+                    if (candidates != null && candidates.length > 0) {
+                        customLibraryIconPath = candidates[0].getAbsolutePath();
+                    }
+                }
+            }
+        }
+
         File desktopFile = new File(lnkFilePath.substring(0, lnkFilePath.lastIndexOf(".")) + ".desktop");
+        String name = lnkFile.getName().substring(0, lnkFile.getName().lastIndexOf("."));
         try (FileOutputStream fos = new FileOutputStream(desktopFile);
              PrintWriter pw = new PrintWriter(fos)) {
             pw.write("[Desktop Entry]\n");
-            pw.write("Name=" + lnkFile.getName().substring(0, lnkFile.getName().lastIndexOf(".")) + "\n");
+            pw.write("Name=" + name + "\n");
             pw.write("Exec=env WINEPREFIX=" + "\"" + imageFs.wineprefix + "\"" + " wine " + filePath + "\n");
             pw.write("Type=Application\n");
+            pw.write("Icon=custom_game\n");
             pw.write("StartupNotify=True\n");
+
+            // Add Pluvia management metadata
+            pw.write("\n[Extra Data]\n");
+            pw.write("game_source=CUSTOM\n");
+            pw.write("custom_name=" + name + "\n");
+            if (!customLibraryIconPath.isEmpty()) {
+                pw.write("customCoverArtPath=" + customLibraryIconPath + "\n");
+            }
         }
         catch (IOException e) {
         }
