@@ -1424,8 +1424,8 @@ private fun DXVKConfigCard(
     val dxvkVersions = state.dxvkVersionEntries.value
     val selectedIdx = state.dxvkSelectedVersion.intValue
     val selectedVersion = if (selectedIdx in dxvkVersions.indices) dxvkVersions[selectedIdx] else ""
-    val isGplAsync = selectedVersion.contains("gplasync")
-    val isAsync = selectedVersion.contains("async")
+    val isGplAsync = selectedVersion.contains("gplasync", ignoreCase = true)
+    val isAsync = selectedVersion.contains("async", ignoreCase = true)
     val asyncEnabled = isAsync || isGplAsync
     val asyncCacheEnabled = isGplAsync
 
@@ -1505,11 +1505,24 @@ private fun DXVKConfigCard(
                     label = stringResource(R.string.container_wine_dxvk_version),
                     entries = state.dxvkVersionEntries.value,
                     selectedIndex = state.dxvkSelectedVersion.intValue,
-                    onSelected = { state.dxvkSelectedVersion.intValue = it }
+                    onSelected = { 
+                        state.dxvkSelectedVersion.intValue = it
+                        val selectedVersion = state.dxvkVersionEntries.value.getOrElse(it) { "" }
+                        val isGplAsync = selectedVersion.contains("gplasync", ignoreCase = true)
+                        val isAsync = selectedVersion.contains("async", ignoreCase = true)
+                        if (isAsync || isGplAsync) {
+                            state.dxvkAsync.value = true
+                        }
+                        if (isGplAsync) {
+                            state.dxvkAsyncCache.value = true
+                        }
+                    }
                 )
 
                 // Async toggle - greyed out when version doesn't support it
                 Spacer(Modifier.height(12.dp))
+                val asyncEnabled = selectedVersion.contains("async", ignoreCase = true) || 
+                                 selectedVersion.contains("gplasync", ignoreCase = true)
                 Box(modifier = Modifier.alpha(if (asyncEnabled) 1f else 0.35f)) {
                     SettingCheckbox(
                         label = stringResource(R.string.container_wine_enabled_async),
@@ -1520,6 +1533,7 @@ private fun DXVKConfigCard(
 
                 // Async Cache toggle - greyed out when version doesn't support it
                 Spacer(Modifier.height(4.dp))
+                val asyncCacheEnabled = selectedVersion.contains("gplasync", ignoreCase = true)
                 Box(modifier = Modifier.alpha(if (asyncCacheEnabled) 1f else 0.35f)) {
                     SettingCheckbox(
                         label = stringResource(R.string.container_wine_enabled_async_cache),

@@ -21,6 +21,7 @@ import com.winlator.cmod.core.DefaultVersion;
 import com.winlator.cmod.core.FileUtils;
 import com.winlator.cmod.core.GPUInformation;
 import com.winlator.cmod.core.KeyValueSet;
+import com.winlator.cmod.core.NetworkHelper;
 import com.winlator.cmod.core.ProcessHelper;
 import com.winlator.cmod.core.TarCompressorUtils;
 import com.winlator.cmod.core.WineInfo;
@@ -533,13 +534,6 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         boolean openWithAndroidBrowser = preferences.getBoolean("open_with_android_browser", false);
         boolean shareAndroidClipboard = preferences.getBoolean("share_android_clipboard", false);
 
-        if (openWithAndroidBrowser)
-            envVars.put("WINE_OPEN_WITH_ANDROID_BROWSER", "1");
-        if (shareAndroidClipboard) {
-            envVars.put("WINE_FROM_ANDROID_CLIPBOARD", "1");
-            envVars.put("WINE_TO_ANDROID_CLIPBOARD", "1");
-        }
-
         EnvVars envVars = new EnvVars();
 
         addBox64EnvVars(envVars, enableBox64Logs);
@@ -550,9 +544,16 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         if (renderer.contains("Mali"))
             envVars.put("BOX64_MMAP32", "0");
 
-        if (envVars.get("BOX64_MMAP32").equals("1") && !wineInfo.isArm64EC()) {
+        if (this.envVars.get("BOX64_MMAP32").equals("1") && !wineInfo.isArm64EC()) {
             Log.d("GuestProgramLauncherComponent", "Disabling map memory placed");
             envVars.put("WRAPPER_DISABLE_PLACED", "1");
+        }
+
+        if (openWithAndroidBrowser)
+            envVars.put("WINE_OPEN_WITH_ANDROID_BROWSER", "1");
+        if (shareAndroidClipboard) {
+            envVars.put("WINE_FROM_ANDROID_CLIPBOARD", "1");
+            envVars.put("WINE_TO_ANDROID_CLIPBOARD", "1");
         }
 
         // Setting up essential environment variables for Wine
@@ -670,38 +671,32 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         Log.d("GuestLauncher", "Final LD_PRELOAD: " + ld_preload);
         envVars.put("LD_PRELOAD", ld_preload);
 
-        // Preserve the launcher-owned preload/input paths while restoring the
-        // full env built upstream in XServerDisplayActivity (driver, DXVK, Vulkan, etc).
-        mergeExternalEnvVars(envVars, envVars.get("LD_PRELOAD"), envVars.get("FAKE_EVDEV_DIR"));
+        // Final Master Merge: Apply all user-selected drivers and custom settings last
+        // to ensure they correctly overwrite default system libraries.
+        if (this.envVars != null) envVars.putAll(this.envVars);
 
         String emulator = container.getEmulator();
-        String emulator64 = container.getEmulator64();
         if (shortcut != null) {
-            emulator = shortcut.getExtra("emulator", container.getEmulator());
-            emulator64 = shortcut.getExtra("emulator64", container.getEmulator64());
-        }
-
-        if (wineInfo.isArm64EC()) {
-            emulator64 = container.getEmulator64();
-            if (shortcut != null) {
-                emulator64 = shortcut.getExtra("emulator64", container.getEmulator64());
-            }
+            emulator = shortcut.getSettingExtra("emulator", container.getEmulator());
         }
 
         repairRuntimeExecutablePermissions(context, imageFs);
+
+        String guestExe = guestExecutable != null ? guestExecutable : "";
+        Log.d("GuestProgramLauncherComponent", "Launching guest: " + (guestExe.isEmpty() ? "desktop" : guestExe));
 
         String command = "";
         String overriddenCommand = envVars.get("GUEST_PROGRAM_LAUNCHER_COMMAND");
         if (overriddenCommand.isEmpty()) {
             if (wineInfo.isArm64EC()) {
-                command = winePath + "/" + guestExecutable;
+                command = winePath + "/" + guestExe;
                 if (emulator.toLowerCase().equals("fexcore")) {
                     envVars.put("HODLL", "libwow64fex.dll");
                 } else {
                     envVars.put("HODLL", "wowbox64.dll");
                 }
             } else {
-                command = imageFs.getBinDir() + "/box64 " + guestExecutable;
+                command = imageFs.getBinDir() + "/box64 " + guestExe;
             }
         } else {
             String[] parts = overriddenCommand.split(";");
@@ -710,6 +705,8 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
             }
             command = command.trim();
         }
+
+        Log.d("GuestProgramLauncherComponent", "Final command: " + command);
 
         File box64File = new File(rootDir, "/usr/bin/box64");
         if (box64File.exists()) {

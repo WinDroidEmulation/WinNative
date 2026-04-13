@@ -1024,8 +1024,8 @@ class ContainerSettingsComposeDialog @JvmOverloads constructor(
         val originalItems = context.resources.getStringArray(R.array.dxvk_version_entries).toMutableList()
         for (profile in contentsManager.getProfiles(ContentProfile.ContentType.CONTENT_TYPE_DXVK)) {
             val entryName = ContentsManager.getEntryName(profile)
-            val firstDash = entryName.indexOf('-')
-            originalItems.add(entryName.substring(firstDash + 1))
+            val firstDashIndex = entryName.indexOf('-')
+            originalItems.add(entryName.substring(firstDashIndex + 1))
         }
         if (!isArm64EC) originalItems.removeAll { it.contains("arm64ec") }
         state.dxvkVersionEntries.value = originalItems
@@ -1038,7 +1038,9 @@ class ContainerSettingsComposeDialog @JvmOverloads constructor(
         val items = mutableListOf<String>()
         items.addAll(context.resources.getStringArray(R.array.vkd3d_version_entries))
         for (profile in contentsManager.getProfiles(ContentProfile.ContentType.CONTENT_TYPE_VKD3D)) {
-            items.add(profile.verName + "-" + profile.verCode)
+            val entryName = ContentsManager.getEntryName(profile)
+            val firstDashIndex = entryName.indexOf('-')
+            items.add(entryName.substring(firstDashIndex + 1))
         }
         state.dxvkVkd3dVersionEntries.value = items
         val configStr = container?.getDXWrapperConfig() ?: Container.DEFAULT_DXWRAPPERCONFIG
@@ -1103,10 +1105,8 @@ class ContainerSettingsComposeDialog @JvmOverloads constructor(
         val framerate = StringUtils.parseNumber(
             state.dxvkFramerateEntries.value.getOrElse(state.dxvkSelectedFramerate.intValue) { "0" }
         )
-        val isGplAsync = version.contains("gplasync")
-        val isAsync = version.contains("async")
-        val async = if (state.dxvkAsync.value && (isAsync || isGplAsync)) "1" else "0"
-        val asyncCache = if (state.dxvkAsyncCache.value && (isAsync || isGplAsync)) "1" else "0"
+        val async = if (state.dxvkAsync.value) "1" else "0"
+        val asyncCache = if (state.dxvkAsyncCache.value) "1" else "0"
         val vkd3dEntries = state.dxvkVkd3dVersionEntries.value
         val vkd3dIdx = state.dxvkSelectedVkd3dVersion.intValue
         val vkd3dVersion = if (vkd3dIdx in vkd3dEntries.indices) vkd3dEntries[vkd3dIdx] else "None"

@@ -521,6 +521,14 @@ public class ContentsManager {
         }
     }
 
+    public String resolveTemplatePath(String path) {
+        return getPathFromTemplate(path);
+    }
+
+    public String getInstallPath(ContentProfile profile) {
+        return getInstallDir(context, profile).getAbsolutePath();
+    }
+
     private String getPathFromTemplate(String path) {
         createDirTemplateMap();
         String realPath = path;
@@ -600,27 +608,21 @@ public class ContentsManager {
     }
 
     public ContentProfile getProfileByEntryName(String entryName) {
-        if (entryName == null) return null;
-        int firstDashIndex = entryName.indexOf('-');
-        int lastDashIndex = entryName.lastIndexOf('-');
-
-        if (firstDashIndex == -1 || firstDashIndex == lastDashIndex) return null;
-
+        int firstDashIndex = entryName.indexOf(45);
+        int lastDashIndex = entryName.lastIndexOf(45);
         try {
             String typeName = entryName.substring(0, firstDashIndex);
             String versionName = entryName.substring(firstDashIndex + 1, lastDashIndex);
             String versionCode = entryName.substring(lastDashIndex + 1);
-
-            List<ContentProfile> profiles = profilesMap.get(ContentProfile.ContentType.getTypeByName(typeName));
-            if (profiles != null) {
-                for (ContentProfile profile : profiles) {
-                    if (versionName.equals(profile.verName) && Integer.parseInt(versionCode) == profile.verCode)
-                        return profile;
+            for (ContentProfile profile : this.profilesMap.get(ContentProfile.ContentType.getTypeByName(typeName))) {
+                if (versionName.equals(profile.verName) && Integer.parseInt(versionCode) == profile.verCode) {
+                    return profile;
                 }
             }
-        } catch (Exception e) {}
-
-        return null;
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public boolean applyContent(ContentProfile profile) {

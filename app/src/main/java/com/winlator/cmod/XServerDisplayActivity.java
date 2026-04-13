@@ -975,13 +975,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     startupSelection + "'");
         }
 
-        // Normalize at runtime only. Do not persist here to avoid silently overwriting
-        // the version selected in container/shortcut settings on every launch.
-        String preNormalizedDxwrapperConfig = dxwrapperConfig;
-        dxwrapperConfig = normalizeDxwrapperConfigForCurrentWine(dxwrapperConfig);
-        Log.d("XServerDisplayActivity", "DXVK launch config normalized before='" +
-                preNormalizedDxwrapperConfig + "' after='" + dxwrapperConfig + "'");
-
         this.graphicsDriverConfig = GraphicsDriverConfigDialog.parseGraphicsDriverConfig(graphicsDriverConfig);
         this.dxwrapperConfig = DXVKConfigDialog.parseConfig(dxwrapperConfig);
         Log.d("XServerDisplayActivity", "VKD3D version (from effective dxwrapperConfig)='" +
@@ -2339,15 +2332,12 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
         if (dxwrapper.contains("dxvk")) {
             String dxwrapperConfig = shortcut != null ? getShortcutSetting("dxwrapperConfig", this.dxwrapperConfig.toString()) : this.dxwrapperConfig.toString();
-            String preNormalizedDxwrapperConfig = dxwrapperConfig;
-            dxwrapperConfig = normalizeDxwrapperConfigForCurrentWine(dxwrapperConfig);
             KeyValueSet currentDXWrapperConfig = DXVKConfigDialog.parseConfig(dxwrapperConfig);
             String dxvkWrapper = "dxvk-" + currentDXWrapperConfig.get("version");
             String vkd3dWrapper = "vkd3d-" + currentDXWrapperConfig.get("vkd3dVersion");
             String ddrawrapper = currentDXWrapperConfig.get("ddrawrapper");
             dxwrapper = dxvkWrapper + ";" + vkd3dWrapper + ";" + ddrawrapper;
-            Log.d("XServerDisplayActivity", "DXVK setupWineSystemFiles config before='" +
-                    preNormalizedDxwrapperConfig + "' after='" + dxwrapperConfig + "' wrapper='" + dxwrapper + "'");
+            Log.d("XServerDisplayActivity", "DXVK setupWineSystemFiles config effective='" + dxwrapperConfig + "' wrapper='" + dxwrapper + "'");
         }
 
         String wincomponents = shortcut != null ? getShortcutSetting("wincomponents", container.getWinComponents()) : container.getWinComponents();
@@ -3015,176 +3005,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
         }
     }
 
-    private String normalizeDxwrapperConfigForCurrentWine(String dxwrapperConfig) {
-        KeyValueSet config = DXVKConfigDialog.parseConfig(dxwrapperConfig);
-        boolean isArm64EC = wineInfo != null && wineInfo.isArm64EC();
-        boolean changed = false;
 
-        String normalizedDxvk = resolveInstalledGraphicsComponentVersion(
-                config.get("version"),
-                ContentProfile.ContentType.CONTENT_TYPE_DXVK,
-                isArm64EC
-        );
-        if (!normalizedDxvk.equals(config.get("version"))) {
-            config.put("version", normalizedDxvk);
-            changed = true;
-        }
-
-        String vkd3dVersion = config.get("vkd3dVersion");
-        if (!vkd3dVersion.isEmpty() && !"None".equalsIgnoreCase(vkd3dVersion)) {
-            String normalizedVkd3d = resolveInstalledGraphicsComponentVersion(
-                    vkd3dVersion,
-                    ContentProfile.ContentType.CONTENT_TYPE_VKD3D,
-                    isArm64EC
-            );
-            if (!normalizedVkd3d.equals(vkd3dVersion)) {
-                config.put("vkd3dVersion", normalizedVkd3d);
-                changed = true;
-            }
-        } else if ("None".equalsIgnoreCase(vkd3dVersion) && this.dxwrapper != null && this.dxwrapper.contains("vkd3d")) {
-            // DXWrapper requests VKD3D but version is None — auto-resolve to best available
-            String resolvedVkd3d = resolveInstalledGraphicsComponentVersion(
-                    DefaultVersion.VKD3D,
-                    ContentProfile.ContentType.CONTENT_TYPE_VKD3D,
-                    isArm64EC
-            );
-            if (resolvedVkd3d != null && !resolvedVkd3d.isEmpty() && !"None".equalsIgnoreCase(resolvedVkd3d)) {
-                config.put("vkd3dVersion", resolvedVkd3d);
-                changed = true;
-                Log.d("XServerDisplayActivity", "VKD3D auto-resolved from 'None' to '" + resolvedVkd3d + "' because dxwrapper=" + this.dxwrapper);
-            }
-        }
-
-        Log.d("XServerDisplayActivity", "normalizeDxwrapperConfigForCurrentWine input='" + dxwrapperConfig +
-                "' output='" + (changed ? config.toString() : dxwrapperConfig) + "' arm64ec=" + isArm64EC +
-                " changed=" + changed);
-        return changed ? config.toString() : dxwrapperConfig;
-    }
-
-    private String resolveInstalledGraphicsComponentVersion(
-            String currentVersion,
-            ContentProfile.ContentType type,
-            boolean isArm64EC
-    ) {
-        if (currentVersion == null || currentVersion.isEmpty()) {
-            return currentVersion;
-        }
-
-        ContentProfile currentProfile = resolveInstalledGraphicsProfileByToken(type, currentVersion);
-        if (currentProfile != null) {
-            String resolvedToken = getContentVersionToken(currentProfile);
-            if (isArm64ComponentVersion(resolvedToken) == isArm64EC) {
-                Log.d("XServerDisplayActivity", "resolveInstalledGraphicsComponentVersion keep current type=" + type +
-                        " current='" + currentVersion + "' resolvedToken='" + resolvedToken +
-                        "' arm64ec=" + isArm64EC);
-                return currentVersion;
-            }
-
-            String sameVersionVariant = findBestInstalledGraphicsToken(type, isArm64EC, currentProfile.verName);
-            if (!sameVersionVariant.isEmpty()) {
-                Log.d("XServerDisplayActivity", "resolveInstalledGraphicsComponentVersion switched same-name variant type=" + type +
-                        " current='" + currentVersion + "' to='" + sameVersionVariant + "' arm64ec=" + isArm64EC);
-                return sameVersionVariant;
-            }
-        } else if (isArm64ComponentVersion(currentVersion) == isArm64EC) {
-            // Keep user-selected values (including built-in/default versions) untouched.
-            Log.d("XServerDisplayActivity", "resolveInstalledGraphicsComponentVersion keep user token type=" + type +
-                    " current='" + currentVersion + "' arm64ec=" + isArm64EC + " (no installed profile match)");
-            return currentVersion;
-        }
-
-        String preferredProfileToken = findBestInstalledGraphicsToken(type, isArm64EC, null);
-        if (!preferredProfileToken.isEmpty()) {
-            Log.d("XServerDisplayActivity", "resolveInstalledGraphicsComponentVersion fallback preferred type=" + type +
-                    " current='" + currentVersion + "' to='" + preferredProfileToken + "' arm64ec=" + isArm64EC);
-            return preferredProfileToken;
-        }
-        Log.d("XServerDisplayActivity", "resolveInstalledGraphicsComponentVersion keep current (no fallback) type=" + type +
-                " current='" + currentVersion + "' arm64ec=" + isArm64EC);
-        return currentVersion;
-    }
-
-    private ContentProfile resolveInstalledGraphicsProfileByToken(
-            ContentProfile.ContentType type,
-            String versionToken
-    ) {
-        if (versionToken == null || versionToken.isEmpty()) return null;
-
-        ContentProfile directMatch = contentsManager.getProfileByEntryName(type.toString() + "-" + versionToken);
-        if (directMatch != null && directMatch.isInstalled) {
-            return directMatch;
-        }
-
-        for (ContentProfile profile : contentsManager.getProfiles(type)) {
-            if (!profile.isInstalled) continue;
-
-            String profileToken = getContentVersionToken(profile);
-            if (versionToken.equals(profileToken) || versionToken.equals(profile.verName)) {
-                Log.d("XServerDisplayActivity", "resolveInstalledGraphicsProfileByToken matched type=" + type +
-                        " token='" + versionToken + "' profileToken='" + profileToken +
-                        "' verName='" + profile.verName + "' verCode=" + profile.verCode);
-                return profile;
-            }
-        }
-        Log.d("XServerDisplayActivity", "resolveInstalledGraphicsProfileByToken no match type=" + type +
-                " token='" + versionToken + "'");
-        return null;
-    }
-
-    private String findBestInstalledGraphicsToken(
-            ContentProfile.ContentType type,
-            boolean isArm64EC,
-            @Nullable String preferredVersionName
-    ) {
-        ContentProfile preferredProfile = null;
-        String normalizedPreferredName = normalizeGraphicsVersionName(preferredVersionName);
-
-        for (ContentProfile profile : contentsManager.getProfiles(type)) {
-            if (!profile.isInstalled) continue;
-
-            String versionToken = getContentVersionToken(profile);
-            if (isArm64ComponentVersion(versionToken) != isArm64EC) continue;
-
-            if (normalizedPreferredName != null && !normalizedPreferredName.equals(profile.verName)) continue;
-
-            if (preferredProfile == null ||
-                    profile.verCode > preferredProfile.verCode ||
-                    (profile.verCode == preferredProfile.verCode &&
-                            profile.verName.compareToIgnoreCase(preferredProfile.verName) > 0)) {
-                preferredProfile = profile;
-            }
-        }
-
-        String selected = preferredProfile != null ? getContentVersionToken(preferredProfile) : "";
-        Log.d("XServerDisplayActivity", "findBestInstalledGraphicsToken type=" + type +
-                " preferredName='" + preferredVersionName + "' normalizedPreferredName='" + normalizedPreferredName +
-                "' arm64ec=" + isArm64EC + " selected='" + selected + "'");
-        return selected;
-    }
-
-    private String normalizeGraphicsVersionName(@Nullable String versionToken) {
-        if (versionToken == null || versionToken.isEmpty()) return null;
-        int lastDashIndex = versionToken.lastIndexOf('-');
-        if (lastDashIndex <= 0 || lastDashIndex == versionToken.length() - 1) return versionToken;
-
-        String suffix = versionToken.substring(lastDashIndex + 1);
-        for (int i = 0; i < suffix.length(); i++) {
-            if (!Character.isDigit(suffix.charAt(i))) {
-                return versionToken;
-            }
-        }
-        return versionToken.substring(0, lastDashIndex);
-    }
-
-    private String getContentVersionToken(ContentProfile profile) {
-        String entryName = ContentsManager.getEntryName(profile);
-        int firstDashIndex = entryName.indexOf('-');
-        return firstDashIndex >= 0 ? entryName.substring(firstDashIndex + 1) : profile.verName;
-    }
-
-    private boolean isArm64ComponentVersion(String version) {
-        return version != null && version.toLowerCase().contains("arm64ec");
-    }
 
     private void ensureWinePrefixReady() {
         if (container == null || wineInfo == null) return;
