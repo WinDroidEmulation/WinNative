@@ -14,6 +14,7 @@ add_library(winlator SHARED
         winlator/sysvshared_memory.c
         winlator/xconnector_epoll.c
         winlator/alsa_client.c
+        winlator/process_lifecycle.c
         winlator/vulkan.c
         xz/native_xz_stream.c
         xz/xz_embedded/xz_crc32.c

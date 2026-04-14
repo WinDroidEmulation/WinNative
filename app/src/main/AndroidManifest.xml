@@ -26,7 +26,7 @@
         tools:ignore="ProtectedPermissions" />
 
     <application
-        android:name="com.winlator.cmod.PluviaApp"
+        android:name="com.winlator.cmod.app.PluviaApp"
         android:label="@string/common_ui_app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -42,8 +42,16 @@
 
         <!-- Setup Wizard (first launch entry point) -->
         <activity
-            android:name="com.winlator.cmod.SetupWizardActivity"
-            android:theme="@style/AppThemeFullscreen.Dark"
+            android:name="com.winlator.cmod.feature.setup.SetupWizardActivity"
+            android:theme="@style/AppThemeFullscreenDarkNoAnimation"
+            android:screenOrientation="sensorLandscape"
+            android:exported="false"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation" />
+
+        <!-- Unified Activity -->
+        <activity
+            android:name="com.winlator.cmod.app.shell.UnifiedActivity"
+            android:theme="@style/AppThemeUnifiedDarkNoAnimation"
             android:screenOrientation="sensorLandscape"
             android:exported="true"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation">
@@ -53,44 +61,27 @@
             </intent-filter>
         </activity>
 
-        <!-- Unified Activity -->
         <activity
-            android:name="com.winlator.cmod.UnifiedActivity"
+            android:name="com.winlator.cmod.feature.stores.steam.SteamLoginActivity"
             android:theme="@style/AppThemeFullscreen.Dark"
             android:screenOrientation="sensorLandscape"
             android:exported="false"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation" />
 
         <activity
-            android:name="com.winlator.cmod.steam.SteamLoginActivity"
-            android:theme="@style/AppThemeFullscreen.Dark"
-            android:screenOrientation="sensorLandscape"
-            android:exported="false"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation" />
-
-        <activity
-            android:name="com.winlator.cmod.epic.ui.auth.EpicOAuthActivity"
+            android:name="com.winlator.cmod.feature.stores.epic.ui.auth.EpicOAuthActivity"
             android:theme="@style/AppTheme.Dark"
             android:screenOrientation="sensor"
             android:exported="false" />
 
         <activity
-            android:name="com.winlator.cmod.gog.ui.auth.GOGOAuthActivity"
+            android:name="com.winlator.cmod.feature.stores.gog.ui.auth.GOGOAuthActivity"
             android:theme="@style/AppTheme.Dark"
             android:screenOrientation="sensor"
             android:exported="false" />
 
-        <!-- Hub Activity -->
         <activity
-            android:name="com.winlator.cmod.HubActivity"
-            android:theme="@style/AppThemeFullscreen.Dark"
-            android:screenOrientation="sensorLandscape"
-            android:exported="true"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation">
-        </activity>
-
-        <activity
-            android:name="com.winlator.cmod.XServerDisplayActivity"
+            android:name="com.winlator.cmod.runtime.display.XServerDisplayActivity"
             android:theme="@style/AppThemeFullscreen"
             android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
@@ -99,45 +90,34 @@
             android:exported="true" />
 
         <activity
-            android:name="com.winlator.cmod.ControlsEditorActivity"
+            android:name="com.winlator.cmod.runtime.input.ControlsEditorActivity"
             android:theme="@style/AppThemeFullscreen.Dark"
             android:screenOrientation="sensorLandscape"
             android:exported="false" />
 
-        <activity
-            android:name=".saves.CustomFilePickerActivity"
-            android:theme="@style/AppTheme"
-            android:screenOrientation="sensor"
-            android:exported="false" />
-
         <receiver
-            android:name=".ShortcutBroadcastReceiver"
+            android:name="com.winlator.cmod.feature.shortcuts.ShortcutBroadcastReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="${applicationId}.SHORTCUT_ADDED" />
+                <action android:name="${applicationId}.PIN_SHORTCUT_RESULT" />
             </intent-filter>
         </receiver>
 
         <service
-            android:name="com.winlator.cmod.steam.service.SteamService"
+            android:name="com.winlator.cmod.feature.stores.steam.service.SteamService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <service
-            android:name="com.winlator.cmod.service.DownloadService"
+            android:name="com.winlator.cmod.feature.stores.epic.service.EpicService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <service
-            android:name="com.winlator.cmod.epic.service.EpicService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <service
-            android:name="com.winlator.cmod.gog.service.GOGService"
+            android:name="com.winlator.cmod.feature.stores.gog.service.GOGService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
@@ -165,8 +145,8 @@
 
         <!-- Provider for Winlator’s DocumentProvider or similar usage -->
         <provider
-            android:name=".core.WinlatorFilesProvider"
-            android:authorities="${applicationId}.core.WinlatorFilesProvider"
+            android:name="com.winlator.cmod.app.provider.WinlatorFilesProvider"
+            android:authorities="${applicationId}.provider.WinlatorFilesProvider"
             android:exported="true"
             android:grantUriPermissions="true"
             android:permission="android.permission.MANAGE_DOCUMENTS">
@@ -174,12 +154,6 @@
                 <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
             </intent-filter>
         </provider>
-
-        <activity
-            android:name=".restore.RestoreActivity"
-            android:process=":restore_process"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar"
-            android:exported="true" />
 
         <meta-data
             android:name="com.samsung.android.multidisplay.keep_process_alive"

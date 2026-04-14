@@ -1,2 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <item type="id" name="main_menu_google" />
+    <item type="id" name="main_menu_stores" />
+    <item type="id" name="main_menu_containers" />
+    <item type="id" name="main_menu_settings" />
+    <item type="id" name="main_menu_contents" />
+    <item type="id" name="main_menu_adrenotools_gpu_drivers" />
+    <item type="id" name="main_menu_input_controls" />
+    <item type="id" name="main_menu_advanced" />
+    <item type="id" name="main_menu_other" />
+
+    <item type="id" name="main_menu_keyboard" />
+    <item type="id" name="main_menu_fps_monitor" />
+    <item type="id" name="main_menu_relative_mouse_movement" />
+    <item type="id" name="main_menu_disable_mouse" />
+    <item type="id" name="main_menu_screen_effects" />
+    <item type="id" name="main_menu_toggle_fullscreen" />
+    <item type="id" name="main_menu_native_rendering" />
+    <item type="id" name="main_menu_pause" />
+    <item type="id" name="main_menu_pip_mode" />
+    <item type="id" name="main_menu_task_manager" />
+    <item type="id" name="main_menu_magnifier" />
+    <item type="id" name="main_menu_logs" />
+    <item type="id" name="main_menu_exit" />
+</resources>
