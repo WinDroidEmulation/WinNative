@@ -1040,8 +1040,8 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     startupSelection + "'");
         }
 
-        this.graphicsDriverConfig = GraphicsDriverConfigDialog.parseGraphicsDriverConfig(graphicsDriverConfig);
-        this.dxwrapperConfig = DXVKConfigDialog.parseConfig(dxwrapperConfig);
+        this.graphicsDriverConfig = GraphicsDriverConfigUtils.parseGraphicsDriverConfig(graphicsDriverConfig);
+        this.dxwrapperConfig = DXVKConfigUtils.parseConfig(dxwrapperConfig);
         Log.d("XServerDisplayActivity", "VKD3D version (from effective dxwrapperConfig)='" +
                 this.dxwrapperConfig.get("vkd3dVersion") + "' dxvkVersion='" +
                 this.dxwrapperConfig.get("version") + "' ddrawrapper='" +
@@ -2432,7 +2432,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
         if (dxwrapper.contains("dxvk")) {
             String dxwrapperConfig = shortcut != null ? getShortcutSetting("dxwrapperConfig", this.dxwrapperConfig.toString()) : this.dxwrapperConfig.toString();
-            KeyValueSet currentDXWrapperConfig = DXVKConfigDialog.parseConfig(dxwrapperConfig);
+            KeyValueSet currentDXWrapperConfig = DXVKConfigUtils.parseConfig(dxwrapperConfig);
             String dxvkWrapper = "dxvk-" + currentDXWrapperConfig.get("version");
             String vkd3dWrapper = "vkd3d-" + currentDXWrapperConfig.get("vkd3dVersion");
             String ddrawrapper = currentDXWrapperConfig.get("ddrawrapper");
