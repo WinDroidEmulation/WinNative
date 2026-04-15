@@ -382,39 +382,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
         return Math.max(0, preferences.getInt("refresh_rate_override", 0));
     }
 
-    private boolean hasPerGameDxvkFrameRateOverride() {
-        if (shortcut == null || shortcutUsesContainerDefaults()) return false;
-
-        String shortcutDxwrapperConfig = shortcut.getExtra("dxwrapperConfig");
-        if (shortcutDxwrapperConfig.isEmpty()) return false;
-
-        KeyValueSet perGameConfig = DXVKConfigUtils.parseConfig(shortcutDxwrapperConfig);
-        return parsePositiveInt(perGameConfig.get("framerate")) > 0;
-    }
-
-    /**
-     * Per-game settings always win over the global refresh rate when determining DXVK frame limit.
-     * Returns 0 (no override) when no explicit user preference is set, matching Ludashi behavior.
-     * The old code fell back to the device's max refresh rate which always injected
-     * dxgi.syncInterval=0 and DXVK_FRAME_RATE, interfering with VKD3D frame pacing
-     * and causing significant FPS drops in DX12 games.
-     */
-    private int getDxvkFrameRateOverride() {
-        int perGameRate = getPerGameRefreshRateOverride();
-        if (perGameRate > 0) {
-            return perGameRate;
-        }
-        if (hasPerGameDxvkFrameRateOverride()) {
-            return 0;
-        }
-
-        int globalRate = getGlobalRefreshRateOverride();
-        if (globalRate > 0) {
-            return globalRate;
-        }
-        return 0;
-    }
-
     private int parsePositiveInt(String value) {
         if (value == null || value.isEmpty()) return 0;
         try {
@@ -3690,8 +3657,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
         File rootDir = imageFs.getRootDir();
 
         if (dxwrapper.contains("dxvk")) {
-            int refreshRateOverride = getDxvkFrameRateOverride();
-            DXVKConfigUtils.setEnvVars(this, dxwrapperConfig, envVars, refreshRateOverride);
+            DXVKConfigUtils.setEnvVars(this, dxwrapperConfig, envVars);
             String version = dxwrapperConfig.get("version");
             if (version.equals("1.11.1-sarek")) {
                 Log.d("GraphicsDriverExtraction", "Disabling Wrapper PATCH_OPCONSTCOMP SPIR-V pass");
