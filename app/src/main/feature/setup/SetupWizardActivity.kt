@@ -155,6 +155,7 @@ class SetupWizardActivity : FragmentActivity() {
         private const val KEY_LAST_DRIVER_ID = "last_driver_id"
         private const val KEY_LAST_CONTENT_PREFIX = "last_content_"
         private const val KEY_DEFAULT_JSON_CACHE = "default_json_cache"
+        private const val KEY_NOTIFICATION_REQUESTED_ONCE = "notification_requested_once"
         private const val DEFAULT_JSON_URL =
             "https://github.com/Xnick417x/Winlator-Bionic-Nightly-wcp/blob/main/default.json"
 
@@ -509,11 +510,6 @@ class SetupWizardActivity : FragmentActivity() {
         ) { granted ->
             notifGranted.value = granted
             notifDenied.value = !granted
-            if (!granted && Build.VERSION.SDK_INT >= 33 &&
-                !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
-            ) {
-                openNotificationSettings()
-            }
         }
 
     private val legacyStoragePermLauncher =
@@ -556,7 +552,7 @@ class SetupWizardActivity : FragmentActivity() {
         }
 
         storageGranted.value = hasStoragePermission()
-        notifGranted.value = hasNotificationPermissionSilently()
+        refreshNotificationPermissionState()
         refreshWizardState()
         loadAdvancedProfiles()
 
@@ -578,9 +574,7 @@ class SetupWizardActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         storageGranted.value = hasStoragePermission()
-        val notificationsEnabled = hasNotificationPermissionSilently()
-        notifGranted.value = notificationsEnabled
-        if (notificationsEnabled) notifDenied.value = false
+        refreshNotificationPermissionState()
         refreshWizardState()
         refreshRecommendedPackageCache()
     }
@@ -621,6 +615,19 @@ class SetupWizardActivity : FragmentActivity() {
 
     private fun hasNotificationPermissionSilently(): Boolean = NotificationManagerCompat.from(this).areNotificationsEnabled()
 
+    private fun refreshNotificationPermissionState() {
+        val notificationsEnabled = hasNotificationPermissionSilently()
+        notifGranted.value = notificationsEnabled
+        notifDenied.value = !notificationsEnabled && hasRequestedNotificationPermissionOnce()
+    }
+
+    private fun hasRequestedNotificationPermissionOnce(): Boolean =
+        prefs(this).getBoolean(KEY_NOTIFICATION_REQUESTED_ONCE, false)
+
+    private fun isNotificationPermissionDialogBlocked(): Boolean =
+        hasRequestedNotificationPermissionOnce() &&
+            !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+
     private fun requestFileAccess() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
@@ -656,9 +663,12 @@ class SetupWizardActivity : FragmentActivity() {
 
     private fun requestNotifications() {
         if (Build.VERSION.SDK_INT >= 33 && applicationInfo.targetSdkVersion >= 33) {
-            if (notifDenied.value) {
+            if (hasNotificationPermissionSilently()) {
+                refreshNotificationPermissionState()
+            } else if (isNotificationPermissionDialogBlocked()) {
                 openNotificationSettings()
             } else {
+                prefs(this).edit().putBoolean(KEY_NOTIFICATION_REQUESTED_ONCE, true).apply()
                 notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         } else {
