@@ -2861,13 +2861,9 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     "' effective='" + effectiveCustomEnvVars + "'");
             envVars.putAll(effectiveCustomEnvVars);
 
-            // Normalize synchronization environment variables (NTSync / ESync / FSync).
+            // Normalize synchronization environment variables (NTSync / ESync).
+            // This auto-detects NTSync and falls back to ESync when unavailable.
             normalizeSyncEnvVars(envVars);
-
-            if (!envVars.has("WINEESYNC") && !envVars.has("WINENTSYNC")
-                    && !envVars.has("PROTON_USE_NTSYNC")) {
-                envVars.put("WINEESYNC", "1");
-            }
 
             ArrayList<String> bindingPaths = new ArrayList<>();
             String drives = shortcut != null ? getShortcutSetting("drives", container.getDrives()) : container.getDrives();
@@ -3702,7 +3698,6 @@ public class XServerDisplayActivity extends AppCompatActivity {
             WineD3DConfigUtils.setEnvVars(this, dxwrapperConfig, envVars);
         }
 
-        envVars.put("VK_ICD_FILENAMES", imageFs.getShareDir() + "/vulkan/icd.d/wrapper_icd.aarch64.json");
         envVars.put("GALLIUM_DRIVER", "zink");
 
         if (firstTimeBoot) {
@@ -3727,6 +3722,8 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     envVars.get("ADRENOTOOLS_DRIVER_NAME") + " hooks=" +
                     envVars.get("ADRENOTOOLS_HOOKS_PATH"));
         }
+
+        envVars.put("VK_ICD_FILENAMES", imageFs.getShareDir() + "/vulkan/icd.d/wrapper_icd.aarch64.json");
 
         String vulkanVersion = graphicsDriverConfig.get("vulkanVersion");
         if (vulkanVersion == null) vulkanVersion = "1.3";
@@ -5187,51 +5184,66 @@ public class XServerDisplayActivity extends AppCompatActivity {
     /**
      * Normalizes synchronization environment variables.
      *
-     * NTSync, ESync, and FSync are mutually exclusive kernel-level synchronization
-     * methods for Wine. This method enforces correct precedence:
+     * NTSync and ESync are the two synchronization methods available on Android.
+     * FSync is compiled out of the Android Wine build (futex_waitv not reliable
+     * on Android bionic), so it is always disabled here.
      *
-     * 1. If NTSync is requested (PROTON_USE_NTSYNC=1 or WINENTSYNC=1):
-     *    a. If /dev/ntsync is accessible: enable NTSync, disable ESync and FSync
-     *    b. If /dev/ntsync is NOT accessible: fall back to plain Wine server sync
-     *       (disable all fast-sync methods for maximum compatibility)
+     * Priority logic:
      *
-     * 2. Translates PROTON_USE_NTSYNC into WINENTSYNC so both Proton-patched and
-     *    Crossover/Wine-GE builds activate the driver regardless of which env var
-     *    name their patches use.
+     * 1. If the user explicitly set WINEESYNC=1 (without any NTSync variable):
+     *    bypass NTSync detection entirely, use ESync.
+     *
+     * 2. If the user explicitly set WINENTSYNC=1 or PROTON_USE_NTSYNC=1:
+     *    try NTSync. If /dev/ntsync is not accessible, fall back to ESync
+     *    automatically (never drop to plain wineserver sync).
+     *
+     * 3. If no sync variables are set at all:
+     *    auto-detect NTSync — use it if /dev/ntsync is accessible,
+     *    otherwise fall back to ESync.
      */
     private void normalizeSyncEnvVars(com.winlator.cmod.runtime.wine.EnvVars envVars) {
-        boolean ntSyncRequested = "1".equals(envVars.get("PROTON_USE_NTSYNC"))
-                || "1".equals(envVars.get("WINENTSYNC"));
+        boolean esyncExplicit = "1".equals(envVars.get("WINEESYNC"));
+        boolean ntSyncExplicit = "1".equals(envVars.get("WINENTSYNC"))
+                || "1".equals(envVars.get("PROTON_USE_NTSYNC"));
 
-        if (!ntSyncRequested) return;
+        // FSync is always disabled on Android (compiled out of Wine build).
+        envVars.remove("WINEFSYNC");
+        envVars.put("PROTON_NO_FSYNC", "1");
 
-        if (canAccessNtsyncDevice()) {
-            // NTSync available — enable it and disable competing sync methods
-            envVars.put("WINENTSYNC", "1");
-            envVars.put("PROTON_USE_NTSYNC", "1");
-
-            // Explicitly disable ESync and FSync (mutually exclusive with NTSync)
-            envVars.remove("WINEESYNC");
-            envVars.remove("WINEFSYNC");
-            envVars.put("PROTON_NO_ESYNC", "1");
-            envVars.put("PROTON_NO_FSYNC", "1");
-
-            Log.d("XServerDisplayActivity", "NTSync: enabled — disabled ESync/FSync");
-        } else {
-            // NTSync requested but device is inaccessible — fall back to plain sync.
-            // Standard Winlator often forces ESync by default, but if NTSync failed,
-            // forcing ESync can cause "Too many open files" errors. Plain server-side
-            // sync is the safest fallback to ensure the game actually boots.
+        if (esyncExplicit && !ntSyncExplicit) {
+            // User explicitly chose ESync — honour that, skip NTSync detection.
             envVars.remove("WINENTSYNC");
             envVars.remove("PROTON_USE_NTSYNC");
-            envVars.remove("WINEESYNC");
-            envVars.remove("WINEFSYNC");
-            envVars.put("WINE_DISABLE_FAST_SYNC", "1");
-            envVars.put("PROTON_NO_ESYNC", "1");
-            envVars.put("PROTON_NO_FSYNC", "1");
+            envVars.put("WINEESYNC", "1");
+            envVars.remove("PROTON_NO_ESYNC");
+            Log.d("XServerDisplayActivity",
+                    "Sync: user selected ESync — using ESync, skipping NTSync detection");
+            return;
+        }
 
-            Log.w("XServerDisplayActivity",
-                    "NTSync: requested but /dev/ntsync not accessible — falling back to plain sync");
+        // Either NTSync was explicitly requested, or no sync vars are set at all.
+        // In both cases: try NTSync first, fall back to ESync if unavailable.
+        if (canAccessNtsyncDevice()) {
+            // NTSync available — enable it, disable ESync (mutually exclusive).
+            envVars.put("WINENTSYNC", "1");
+            envVars.put("PROTON_USE_NTSYNC", "1");
+            envVars.remove("WINEESYNC");
+            envVars.put("PROTON_NO_ESYNC", "1");
+            Log.d("XServerDisplayActivity",
+                    "Sync: NTSync enabled (/dev/ntsync accessible) — disabled ESync");
+        } else {
+            // NTSync not available — fall back to ESync automatically.
+            envVars.remove("WINENTSYNC");
+            envVars.remove("PROTON_USE_NTSYNC");
+            envVars.put("WINEESYNC", "1");
+            envVars.remove("PROTON_NO_ESYNC");
+            if (ntSyncExplicit) {
+                Log.w("XServerDisplayActivity",
+                        "Sync: NTSync requested but /dev/ntsync not accessible — falling back to ESync");
+            } else {
+                Log.d("XServerDisplayActivity",
+                        "Sync: NTSync not available (no /dev/ntsync) — using ESync");
+            }
         }
     }
 

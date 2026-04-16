@@ -22,7 +22,6 @@ PFN_vkEnumeratePhysicalDevices enumeratePhysicalDevices;
 PFN_vkDestroyInstance destroyInstance;
 
 static void *vulkan_handle = NULL;
-static void *vulkan_mapping_handle = NULL;
 
 static char *get_native_library_dir(JNIEnv *env, jobject context) {
   char *native_libdir = NULL;
@@ -196,12 +195,11 @@ static void init_vulkan(JNIEnv *env, jobject context, const char *driver_name) {
   asprintf(&tmpdir, "%s%s", driver_path, "temp");
   mkdir(tmpdir, S_IRWXU | S_IRWXG);
 
-  vulkan_mapping_handle = NULL;
   vulkan_handle = adrenotools_open_libvulkan(
       RTLD_LOCAL | RTLD_NOW,
-      ADRENOTOOLS_DRIVER_CUSTOM | ADRENOTOOLS_DRIVER_GPU_MAPPING_IMPORT, tmpdir,
+      ADRENOTOOLS_DRIVER_CUSTOM, tmpdir,
       native_library_dir, driver_path, library_name, NULL,
-      &vulkan_mapping_handle);
+      NULL);
 }
 
 static VkResult create_instance(jstring driverName, JNIEnv *env,
