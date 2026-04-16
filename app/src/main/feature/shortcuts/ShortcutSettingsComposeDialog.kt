@@ -498,7 +498,8 @@ class ShortcutSettingsComposeDialog private constructor(
     }
 
     private fun loadContentsAsync() {
-        Executors.newSingleThreadExecutor().execute {
+        val executor = Executors.newSingleThreadExecutor()
+        executor.execute {
             try {
                 contentsManager.syncContents()
                 activity.runOnUiThread {
@@ -513,6 +514,8 @@ class ShortcutSettingsComposeDialog private constructor(
                 activity.runOnUiThread {
                     state.isLoaded.value = true
                 }
+            } finally {
+                executor.shutdown()
             }
         }
     }

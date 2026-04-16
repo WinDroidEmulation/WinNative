@@ -25,6 +25,7 @@ public class WineRequestHandler {
 
   private Context context;
   private ServerSocket serverSocket;
+  private ExecutorService requestExecutor;
 
   public ServerSocket getServerSocket() {
     return serverSocket;
@@ -35,8 +36,12 @@ public class WineRequestHandler {
   }
 
   public void start() {
-    ExecutorService executor = Executors.newSingleThreadExecutor();
-    executor.execute(
+    if (requestExecutor != null && !requestExecutor.isShutdown()) {
+      return;
+    }
+
+    requestExecutor = Executors.newSingleThreadExecutor();
+    requestExecutor.execute(
         () -> {
           try {
             serverSocket = new ServerSocket(20000);
@@ -48,6 +53,8 @@ public class WineRequestHandler {
               handleRequest(inputStream, outputStream, requestCode);
             }
           } catch (IOException e) {
+          } finally {
+            serverSocket = null;
           }
         });
   }
@@ -58,6 +65,11 @@ public class WineRequestHandler {
         serverSocket.close();
       } catch (IOException e) {
       }
+    }
+
+    if (requestExecutor != null) {
+      requestExecutor.shutdownNow();
+      requestExecutor = null;
     }
   }
 

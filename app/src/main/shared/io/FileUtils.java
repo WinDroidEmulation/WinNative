@@ -456,7 +456,15 @@ public abstract class FileUtils {
   }
 
   public static void getSizeAsync(File file, Callback<Long> callback) {
-    Executors.newSingleThreadExecutor().execute(() -> getSize(file, callback));
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
+        () -> {
+          try {
+            getSize(file, callback);
+          } finally {
+            executor.shutdown();
+          }
+        });
   }
 
   private static void getSize(File file, Callback<Long> callback) {

@@ -68,6 +68,7 @@ import com.winlator.cmod.feature.setup.SetupWizardActivity;
 import com.winlator.cmod.runtime.container.Container;
 import com.winlator.cmod.runtime.container.ContainerManager;
 import com.winlator.cmod.runtime.container.Shortcut;
+import com.winlator.cmod.runtime.session.GameSessionTracker;
 import com.winlator.cmod.shared.ui.dialog.ContentDialog;
 import com.winlator.cmod.feature.settings.DebugDialog;
 import com.winlator.cmod.feature.settings.DXVKConfigUtils;
@@ -488,6 +489,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        GameSessionTracker.onSessionStarted();
         AppUtils.hideSystemUI(this);
         AppUtils.keepScreenOn(this);
         // Clean up any shared debug logs and prepare for fresh session logging
@@ -1160,7 +1162,9 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 // No profile defined, run the simulated dialog confirmation for input controls
                 simulateConfirmInputControlsDialog();
             }
-            Executors.newSingleThreadExecutor().execute(() -> {
+            final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+            executor.execute(() -> {
+                try {
                 // Cancel any pending post-game update check since we're launching a new game
                 UpdateChecker.INSTANCE.cancelPostGameCheck();
 
@@ -1214,6 +1218,9 @@ public class XServerDisplayActivity extends AppCompatActivity {
                     setupXEnvironment();
                 } catch (PackageManager.NameNotFoundException e) {
                     throw new RuntimeException(e);
+                }
+                } finally {
+                    executor.shutdown();
                 }
             });
         };
@@ -1717,7 +1724,8 @@ public class XServerDisplayActivity extends AppCompatActivity {
         Log.d("XServerDisplayActivity",
                 "Steam wrapper terminated with status " + status + "; watching Wine processes before exiting");
 
-        Executors.newSingleThreadExecutor().execute(() -> {
+        final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.execute(() -> {
             try {
                 long startTime = System.currentTimeMillis();
                 long lastNonCoreSeenAt = -1L;
@@ -1770,6 +1778,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
                 }
             } finally {
                 steamExitWatchRunning.set(false);
+                executor.shutdown();
             }
         });
 
@@ -2074,6 +2083,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        GameSessionTracker.onSessionEnded();
         super.onDestroy();
         // Schedule a deferred update check 10 s after game exit
         UpdateChecker.INSTANCE.schedulePostGameCheck(this);

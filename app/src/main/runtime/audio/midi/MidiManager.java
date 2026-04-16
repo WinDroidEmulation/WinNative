@@ -36,27 +36,31 @@ public class MidiManager {
   }
 
   public static void load(File file, OnMidiLoadedCallback callback) {
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             () -> {
               try {
                 SF2Soundbank soundBank = new SF2Soundbank(file);
                 callback.onSuccess(soundBank);
               } catch (Exception e) {
                 callback.onFailed(e);
+              } finally {
+                executor.shutdown();
               }
             });
   }
 
   public static void load(InputStream in, OnMidiLoadedCallback callback) throws IOException {
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             () -> {
               try {
                 SF2Soundbank soundBank = new SF2Soundbank(in);
                 callback.onSuccess(soundBank);
               } catch (Exception e) {
                 callback.onFailed(e);
+              } finally {
+                executor.shutdown();
               }
             });
   }
@@ -94,18 +98,22 @@ public class MidiManager {
       return;
     }
 
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             () -> {
-              if (FileUtils.copy(context, uri, dest)) {
-                try {
-                  new SF2Soundbank(dest);
-                  callback.onSuccess();
-                } catch (Exception e) {
-                  dest.delete();
-                  callback.onFailed(ERROR_BADFORMAT);
-                }
-              } else callback.onFailed(ERROR_UNKNOWN);
+              try {
+                if (FileUtils.copy(context, uri, dest)) {
+                  try {
+                    new SF2Soundbank(dest);
+                    callback.onSuccess();
+                  } catch (Exception e) {
+                    dest.delete();
+                    callback.onFailed(ERROR_BADFORMAT);
+                  }
+                } else callback.onFailed(ERROR_UNKNOWN);
+              } finally {
+                executor.shutdown();
+              }
             });
   }
 

@@ -9,6 +9,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +37,7 @@ public class MidiHandler {
   private long lastMidiMsgTime = 0;
   private ShortMessage message = new ShortMessage();
   private ScheduledExecutorService scheduler;
+  private ExecutorService socketExecutor;
   private static final long CHECK_DELAY = 200;
 
   public void setSoundBank(SF2Soundbank soundBank) {
@@ -45,8 +47,13 @@ public class MidiHandler {
   }
 
   public void start() {
+    if (running) {
+      return;
+    }
+
     running = true;
-    Executors.newSingleThreadExecutor()
+    socketExecutor = Executors.newSingleThreadExecutor();
+    socketExecutor
         .execute(
             () -> {
               try {
@@ -78,6 +85,11 @@ public class MidiHandler {
     if (scheduler != null) {
       scheduler.shutdown();
       scheduler = null;
+    }
+
+    if (socketExecutor != null) {
+      socketExecutor.shutdownNow();
+      socketExecutor = null;
     }
   }
 
@@ -114,7 +126,10 @@ public class MidiHandler {
       case RequestCodes.MIDI_CLOSE:
         clearRecv();
         clearSynth();
-        if (scheduler != null) scheduler.shutdown();
+        if (scheduler != null) {
+          scheduler.shutdown();
+          scheduler = null;
+        }
         break;
       case RequestCodes.MIDI_RESET:
         // stub

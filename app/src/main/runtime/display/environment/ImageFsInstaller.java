@@ -96,68 +96,72 @@ public abstract class ImageFsInstaller {
 
     SettingsConfig.resetEmulatorsVersion(activity);
 
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             () -> {
-              clearRootDir(rootDir);
-              final byte compressionRatio = 22;
-              final long contentLength =
-                  (long) (FileUtils.getSize(activity, "imagefs.txz") * (100.0f / compressionRatio));
-              AtomicLong totalSizeRef = new AtomicLong();
+              try {
+                clearRootDir(rootDir);
+                final byte compressionRatio = 22;
+                final long contentLength =
+                    (long) (FileUtils.getSize(activity, "imagefs.txz") * (100.0f / compressionRatio));
+                AtomicLong totalSizeRef = new AtomicLong();
 
-              boolean success =
-                  TarCompressorUtils.extract(
-                      TarCompressorUtils.Type.XZ,
-                      activity,
-                      "imagefs.txz",
-                      rootDir,
-                      (file, size) -> {
-                        if (size > 0) {
-                          long totalSize = totalSizeRef.addAndGet(size);
-                          final int progress = (int) (((float) totalSize / contentLength) * 100);
-                          if (listener != null) listener.onProgress(progress);
+                boolean success =
+                    TarCompressorUtils.extract(
+                        TarCompressorUtils.Type.XZ,
+                        activity,
+                        "imagefs.txz",
+                        rootDir,
+                        (file, size) -> {
+                          if (size > 0) {
+                            long totalSize = totalSizeRef.addAndGet(size);
+                            final int progress = (int) (((float) totalSize / contentLength) * 100);
+                            if (listener != null) listener.onProgress(progress);
+                          }
+                          return file;
+                        });
+
+                if (success) {
+                  ExecutorService pool = Executors.newFixedThreadPool(3);
+                  CountDownLatch latch = new CountDownLatch(3);
+                  pool.execute(
+                      () -> {
+                        try {
+                          installWineFromAssets(activity);
+                        } finally {
+                          latch.countDown();
                         }
-                        return file;
                       });
+                  pool.execute(
+                      () -> {
+                        try {
+                          installDriversFromAssets(activity);
+                        } finally {
+                          latch.countDown();
+                        }
+                      });
+                  pool.execute(
+                      () -> {
+                        try {
+                          installGuestExtras(activity, rootDir);
+                        } finally {
+                          latch.countDown();
+                        }
+                      });
+                  try {
+                    latch.await();
+                  } catch (InterruptedException ignored) {
+                  }
+                  pool.shutdown();
+                  imageFs.createImgVersionFile(LATEST_VERSION);
+                  resetContainerImgVersions(activity);
+                } else
+                  AppUtils.showToast(activity, R.string.setup_wizard_unable_to_install_system_files);
 
-              if (success) {
-                ExecutorService pool = Executors.newFixedThreadPool(3);
-                CountDownLatch latch = new CountDownLatch(3);
-                pool.execute(
-                    () -> {
-                      try {
-                        installWineFromAssets(activity);
-                      } finally {
-                        latch.countDown();
-                      }
-                    });
-                pool.execute(
-                    () -> {
-                      try {
-                        installDriversFromAssets(activity);
-                      } finally {
-                        latch.countDown();
-                      }
-                    });
-                pool.execute(
-                    () -> {
-                      try {
-                        installGuestExtras(activity, rootDir);
-                      } finally {
-                        latch.countDown();
-                      }
-                    });
-                try {
-                  latch.await();
-                } catch (InterruptedException ignored) {
-                }
-                pool.shutdown();
-                imageFs.createImgVersionFile(LATEST_VERSION);
-                resetContainerImgVersions(activity);
-              } else
-                AppUtils.showToast(activity, R.string.setup_wizard_unable_to_install_system_files);
-
-              if (listener != null) listener.onFinished(success);
+                if (listener != null) listener.onFinished(success);
+              } finally {
+                executor.shutdown();
+              }
             });
   }
 
@@ -178,75 +182,79 @@ public abstract class ImageFsInstaller {
     activity.runOnUiThread(() -> dialog.show(R.string.setup_wizard_installing_system_files));
 
     File rootDir = imageFs.getRootDir();
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             () -> {
-              clearRootDir(rootDir);
-              final byte compressionRatio = 22;
-              final long contentLength =
-                  (long) (FileUtils.getSize(activity, "imagefs.txz") * (100.0f / compressionRatio));
-              AtomicLong totalSizeRef = new AtomicLong();
+              try {
+                clearRootDir(rootDir);
+                final byte compressionRatio = 22;
+                final long contentLength =
+                    (long) (FileUtils.getSize(activity, "imagefs.txz") * (100.0f / compressionRatio));
+                AtomicLong totalSizeRef = new AtomicLong();
 
-              boolean success =
-                  TarCompressorUtils.extract(
-                      TarCompressorUtils.Type.XZ,
-                      activity,
-                      "imagefs.txz",
-                      rootDir,
-                      (file, size) -> {
-                        if (size > 0) {
-                          long totalSize = totalSizeRef.addAndGet(size);
-                          final int progress = (int) (((float) totalSize / contentLength) * 100);
-                          activity.runOnUiThread(() -> dialog.setProgress(progress));
+                boolean success =
+                    TarCompressorUtils.extract(
+                        TarCompressorUtils.Type.XZ,
+                        activity,
+                        "imagefs.txz",
+                        rootDir,
+                        (file, size) -> {
+                          if (size > 0) {
+                            long totalSize = totalSizeRef.addAndGet(size);
+                            final int progress = (int) (((float) totalSize / contentLength) * 100);
+                            activity.runOnUiThread(() -> dialog.setProgress(progress));
+                          }
+                          return file;
+                        });
+
+                if (success) {
+                  ExecutorService pool = Executors.newFixedThreadPool(2);
+                  CountDownLatch latch = new CountDownLatch(2);
+                  pool.execute(
+                      () -> {
+                        try {
+                          String[] versions =
+                              activity.getResources().getStringArray(R.array.wine_entries);
+                          for (String version : versions) {
+                            File outFile = new File(rootDir, "/opt/" + version);
+                            outFile.mkdirs();
+                            TarCompressorUtils.extract(
+                                TarCompressorUtils.Type.XZ, activity, version + ".txz", outFile);
+                          }
+                        } catch (Exception e) {
+                          /* wine assets may not exist */
+                        } finally {
+                          latch.countDown();
                         }
-                        return file;
                       });
-
-              if (success) {
-                ExecutorService pool = Executors.newFixedThreadPool(2);
-                CountDownLatch latch = new CountDownLatch(2);
-                pool.execute(
-                    () -> {
-                      try {
-                        String[] versions =
-                            activity.getResources().getStringArray(R.array.wine_entries);
-                        for (String version : versions) {
-                          File outFile = new File(rootDir, "/opt/" + version);
-                          outFile.mkdirs();
-                          TarCompressorUtils.extract(
-                              TarCompressorUtils.Type.XZ, activity, version + ".txz", outFile);
+                  pool.execute(
+                      () -> {
+                        try {
+                          installGuestExtras(activity, rootDir);
+                        } finally {
+                          latch.countDown();
                         }
-                      } catch (Exception e) {
-                        /* wine assets may not exist */
-                      } finally {
-                        latch.countDown();
-                      }
-                    });
-                pool.execute(
-                    () -> {
-                      try {
-                        installGuestExtras(activity, rootDir);
-                      } finally {
-                        latch.countDown();
-                      }
-                    });
-                try {
-                  latch.await();
-                } catch (InterruptedException ignored) {
+                      });
+                  try {
+                    latch.await();
+                  } catch (InterruptedException ignored) {
+                  }
+                  pool.shutdown();
+                  clearSteamDllMarkers(activity);
+                  imageFs.createImgVersionFile(LATEST_VERSION);
+                } else {
+                  activity.runOnUiThread(
+                      () ->
+                          AppUtils.showToast(
+                              activity,
+                              R.string.setup_wizard_unable_to_install_system_files,
+                              android.widget.Toast.LENGTH_LONG));
                 }
-                pool.shutdown();
-                clearSteamDllMarkers(activity);
-                imageFs.createImgVersionFile(LATEST_VERSION);
-              } else {
-                activity.runOnUiThread(
-                    () ->
-                        AppUtils.showToast(
-                            activity,
-                            R.string.setup_wizard_unable_to_install_system_files,
-                            android.widget.Toast.LENGTH_LONG));
-              }
 
-              dialog.closeOnUiThread();
+                dialog.closeOnUiThread();
+              } finally {
+                executor.shutdown();
+              }
             });
   }
 

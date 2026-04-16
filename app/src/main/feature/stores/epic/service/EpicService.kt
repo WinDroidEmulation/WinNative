@@ -20,6 +20,7 @@ import com.winlator.cmod.feature.stores.steam.events.AndroidEvent
 import com.winlator.cmod.feature.stores.steam.utils.ContainerUtils
 import com.winlator.cmod.feature.stores.steam.utils.MarkerUtils
 import com.winlator.cmod.feature.stores.steam.utils.PrefManager
+import com.winlator.cmod.runtime.session.GameSessionTracker
 import com.winlator.cmod.shared.android.NotificationHelper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
@@ -826,6 +827,19 @@ class EpicService : Service() {
         }
 
         return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+
+        if (GameSessionTracker.isSessionActive()) {
+            Timber.tag("EPIC").i("Task removed while a game session is active; keeping service alive")
+        } else if (!hasActiveOperations()) {
+            Timber.tag("EPIC").i("Task removed while idle; stopping service")
+            stopSelf()
+        } else {
+            Timber.tag("EPIC").i("Task removed but active operations are still running; keeping service alive")
+        }
     }
 
     override fun onDestroy() {

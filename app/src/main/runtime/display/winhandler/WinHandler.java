@@ -29,8 +29,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class WinHandler {
@@ -75,6 +77,9 @@ public class WinHandler {
   private boolean xinputDisabledInitialized = false;
   private ExternalController currentController;
   private final GamepadState outputGamepadState = new GamepadState();
+  private ExecutorService sendExecutor;
+  private ExecutorService receiveExecutor;
+  private ScheduledExecutorService delayedCommandExecutor;
   private int lastGamepadSource = 0;
   private float smoothedGyroX = 0.0f;
   private float smoothedGyroY = 0.0f;
@@ -310,8 +315,8 @@ public class WinHandler {
   }
 
   private void startSendThread() {
-    Executors.newSingleThreadExecutor()
-        .execute(
+    sendExecutor = Executors.newSingleThreadExecutor();
+    sendExecutor.execute(
             () -> {
               while (this.running) {
                 synchronized (this.actions) {
@@ -329,14 +334,17 @@ public class WinHandler {
 
   public void stop() {
     this.running = false;
+    this.initReceived = false;
     closeFakeInputWriter();
     if (this.socket != null) {
       this.socket.close();
       this.socket = null;
     }
     synchronized (this.actions) {
+      this.actions.clear();
       this.actions.notify();
     }
+    shutdownExecutors();
   }
 
   private void handleRequest(byte requestCode, int port) {
@@ -395,8 +403,8 @@ public class WinHandler {
     }
     this.running = true;
     startSendThread();
-    Executors.newSingleThreadExecutor()
-        .execute(
+    receiveExecutor = Executors.newSingleThreadExecutor();
+    receiveExecutor.execute(
             () -> {
               try {
                 this.socket = new DatagramSocket((SocketAddress) null);
@@ -413,6 +421,21 @@ public class WinHandler {
               } catch (IOException e) {
               }
             });
+  }
+
+  private void shutdownExecutors() {
+    if (sendExecutor != null) {
+      sendExecutor.shutdownNow();
+      sendExecutor = null;
+    }
+    if (receiveExecutor != null) {
+      receiveExecutor.shutdownNow();
+      receiveExecutor = null;
+    }
+    if (delayedCommandExecutor != null) {
+      delayedCommandExecutor.shutdownNow();
+      delayedCommandExecutor = null;
+    }
   }
 
   public void sendGamepadState() {
@@ -995,7 +1018,9 @@ public class WinHandler {
     if (command == null || command.trim().isEmpty() || delaySeconds < 0) {
       return;
     }
-    Executors.newSingleThreadScheduledExecutor()
-        .schedule(() -> exec(command), delaySeconds, TimeUnit.SECONDS);
+    if (delayedCommandExecutor == null || delayedCommandExecutor.isShutdown()) {
+      delayedCommandExecutor = Executors.newSingleThreadScheduledExecutor();
+    }
+    delayedCommandExecutor.schedule(() -> exec(command), delaySeconds, TimeUnit.SECONDS);
   }
 }

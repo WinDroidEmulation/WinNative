@@ -219,8 +219,8 @@ public abstract class ProcessHelper {
   }
 
   private static void createDebugThread(final InputStream inputStream) {
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             () -> {
               try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
                 String line;
@@ -234,14 +234,16 @@ public abstract class ProcessHelper {
                 }
               } catch (IOException e) {
                 Log.e("ProcessHelper", "Error in debug thread", e);
+              } finally {
+                executor.shutdown();
               }
             });
   }
 
   private static void createWaitForThread(
       java.lang.Process process, final Callback<Integer> terminationCallback) {
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             new Runnable() {
               @Override
               public void run() {
@@ -250,7 +252,10 @@ public abstract class ProcessHelper {
                   drainDeadChildren("process waitFor");
                   terminationCallback.call(status);
                 } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
                   Log.e("ProcessHelper", "Error waiting for process termination", e);
+                } finally {
+                  executor.shutdown();
                 }
               }
             });

@@ -693,7 +693,8 @@ class SetupWizardActivity : FragmentActivity() {
         val imageFs = ImageFs.find(this)
         val rootDir = imageFs.rootDir
 
-        Executors.newSingleThreadExecutor().execute {
+        val executor = Executors.newSingleThreadExecutor()
+        executor.execute {
             try {
                 clearRootDir(rootDir)
 
@@ -778,6 +779,8 @@ class SetupWizardActivity : FragmentActivity() {
                     imageFsInstalling.value = false
                     wizardError.value = "ImageFS install failed: ${e.message}"
                 }
+            } finally {
+                executor.shutdown()
             }
         }
     }

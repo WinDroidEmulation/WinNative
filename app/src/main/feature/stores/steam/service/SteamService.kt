@@ -59,6 +59,7 @@ import com.winlator.cmod.feature.stores.steam.utils.LicenseSerializer
 import com.winlator.cmod.feature.stores.steam.utils.MarkerUtils
 import com.winlator.cmod.feature.stores.steam.utils.Net
 import com.winlator.cmod.feature.stores.steam.utils.PrefManager
+import com.winlator.cmod.runtime.session.GameSessionTracker
 import com.winlator.cmod.feature.stores.steam.utils.SteamUtils
 import com.winlator.cmod.feature.stores.steam.utils.generateSteamApp
 import com.winlator.cmod.feature.sync.google.CloudSyncManager
@@ -5027,6 +5028,19 @@ class SteamService :
         return START_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+
+        if (GameSessionTracker.isSessionActive()) {
+            Timber.i("Task removed while a game session is active; keeping Steam service alive")
+        } else if (!hasActiveOperations()) {
+            Timber.i("Task removed while Steam service is idle; stopping service")
+            scope.launch { stop() }
+        } else {
+            Timber.i("Task removed but Steam service still has active operations; keeping service alive")
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
 
@@ -5096,6 +5110,7 @@ class SteamService :
             // callback does it for us
         } else {
             clearValues()
+            stopSelf()
         }
     }
 

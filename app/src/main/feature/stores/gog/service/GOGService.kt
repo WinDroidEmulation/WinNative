@@ -16,6 +16,7 @@ import com.winlator.cmod.feature.stores.steam.events.AndroidEvent
 import com.winlator.cmod.feature.stores.steam.utils.ContainerUtils
 import com.winlator.cmod.feature.stores.steam.utils.MarkerUtils
 import com.winlator.cmod.runtime.container.Container
+import com.winlator.cmod.runtime.session.GameSessionTracker
 import com.winlator.cmod.shared.android.NotificationHelper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
@@ -175,7 +176,10 @@ class GOGService : Service() {
         // SYNC & OPERATIONS
         // ==========================================================================
 
-        fun hasActiveOperations(): Boolean = syncInProgress || backgroundSyncJob?.isActive == true
+        fun hasActiveOperations(): Boolean =
+            syncInProgress ||
+                backgroundSyncJob?.isActive == true ||
+                hasActiveDownload()
 
         private fun setSyncInProgress(inProgress: Boolean) {
             syncInProgress = inProgress
@@ -895,6 +899,19 @@ class GOGService : Service() {
         }
 
         return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+
+        if (GameSessionTracker.isSessionActive()) {
+            Timber.i("[GOGService] Task removed while a game session is active; keeping service alive")
+        } else if (!hasActiveOperations()) {
+            Timber.i("[GOGService] Task removed while idle; stopping service")
+            stopSelf()
+        } else {
+            Timber.i("[GOGService] Task removed but active operations are still running; keeping service alive")
+        }
     }
 
     override fun onDestroy() {

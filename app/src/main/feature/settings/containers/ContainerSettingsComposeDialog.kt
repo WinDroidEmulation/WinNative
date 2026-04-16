@@ -481,7 +481,8 @@ class ContainerSettingsComposeDialog @JvmOverloads constructor(
     }
 
     private fun loadContentsAsync() {
-        Executors.newSingleThreadExecutor().execute {
+        val executor = Executors.newSingleThreadExecutor()
+        executor.execute {
             try {
                 contentsManager.syncContents()
                 activity.runOnUiThread {
@@ -496,6 +497,8 @@ class ContainerSettingsComposeDialog @JvmOverloads constructor(
                 activity.runOnUiThread {
                     state.isLoaded.value = true
                 }
+            } finally {
+                executor.shutdown()
             }
         }
     }

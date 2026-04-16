@@ -153,11 +153,15 @@ public class ContainerManager {
   public void createContainerAsync(
       final JSONObject data, ContentsManager contentsManager, Callback<Container> callback) {
     final Handler handler = new Handler(Looper.getMainLooper());
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             () -> {
-              final Container container = createContainer(data, contentsManager);
-              handler.post(() -> callback.call(container));
+              try {
+                final Container container = createContainer(data, contentsManager);
+                handler.post(() -> callback.call(container));
+              } finally {
+                executor.shutdown();
+              }
             });
   }
 
@@ -168,25 +172,33 @@ public class ContainerManager {
   public void duplicateContainerAsync(
       Container container, Callback<Integer> progressCallback, Runnable callback) {
     final Handler handler = new Handler(Looper.getMainLooper());
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             () -> {
-              Callback<Integer> uiProgress =
-                  progressCallback != null
-                      ? progress -> handler.post(() -> progressCallback.call(progress))
-                      : null;
-              duplicateContainer(container, uiProgress);
-              handler.post(callback);
+              try {
+                Callback<Integer> uiProgress =
+                    progressCallback != null
+                        ? progress -> handler.post(() -> progressCallback.call(progress))
+                        : null;
+                duplicateContainer(container, uiProgress);
+                handler.post(callback);
+              } finally {
+                executor.shutdown();
+              }
             });
   }
 
   public void removeContainerAsync(Container container, Runnable callback) {
     final Handler handler = new Handler(Looper.getMainLooper());
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             () -> {
-              removeContainer(container);
-              handler.post(callback);
+              try {
+                removeContainer(container);
+                handler.post(callback);
+              } finally {
+                executor.shutdown();
+              }
             });
   }
 

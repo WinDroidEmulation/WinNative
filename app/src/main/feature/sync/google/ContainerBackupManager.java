@@ -48,7 +48,6 @@ public final class ContainerBackupManager {
   private static final int AUTH_SESSION_RETRY_COUNT = 5;
   private static final long AUTH_SESSION_RETRY_DELAY_MS = 750L;
 
-  private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
   private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
   private static final MediaType JSON_MEDIA_TYPE = MediaType.get("application/json; charset=UTF-8");
   private static final MediaType ZIP_MEDIA_TYPE = MediaType.get("application/zip");
@@ -109,12 +108,12 @@ public final class ContainerBackupManager {
 
   public static void backupContainer(
       Activity activity, Container container, ResultCallback<BackupResult> callback) {
-    EXECUTOR.execute(() -> post(callback, performBackup(activity, container)));
+    executeAsync(() -> post(callback, performBackup(activity, container)));
   }
 
   public static void prepareRestore(
       Activity activity, Container container, ResultCallback<RestorePreparation> callback) {
-    EXECUTOR.execute(() -> post(callback, prepareRestoreInternal(activity, container)));
+    executeAsync(() -> post(callback, prepareRestoreInternal(activity, container)));
   }
 
   public static void restoreContainerFromDriveFile(
@@ -122,7 +121,19 @@ public final class ContainerBackupManager {
       Container container,
       DriveBackupFile driveFile,
       ResultCallback<BackupResult> callback) {
-    EXECUTOR.execute(() -> post(callback, performRestore(activity, container, driveFile)));
+    executeAsync(() -> post(callback, performRestore(activity, container, driveFile)));
+  }
+
+  private static void executeAsync(Runnable action) {
+    final ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
+        () -> {
+          try {
+            action.run();
+          } finally {
+            executor.shutdown();
+          }
+        });
   }
 
   private static <T> void post(ResultCallback<T> callback, T value) {

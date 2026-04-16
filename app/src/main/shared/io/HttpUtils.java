@@ -34,7 +34,15 @@ public abstract class HttpUtils {
   }
 
   public static void download(final String url, final Callback<String> onDownloadComplete) {
-    Executors.newSingleThreadExecutor().execute(() -> downloadAsync(url, onDownloadComplete));
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
+        () -> {
+          try {
+            downloadAsync(url, onDownloadComplete);
+          } finally {
+            executor.shutdown();
+          }
+        });
   }
 
   private static void downloadAsync(
@@ -83,27 +91,31 @@ public abstract class HttpUtils {
     final DownloadProgressDialog dialog = new DownloadProgressDialog(activity);
     final AtomicBoolean interruptRef = new AtomicBoolean();
     dialog.show(() -> interruptRef.set(true));
-    Executors.newSingleThreadExecutor()
-        .execute(
+    final java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+    executor.execute(
             () -> {
-              downloadAsync(
-                  url,
-                  destination,
-                  interruptRef,
-                  (progress) -> {
-                    activity.runOnUiThread(
-                        () -> {
-                          dialog.setProgress(progress);
-                        });
-                  },
-                  (success) -> {
-                    if (!success && destination.isFile()) destination.delete();
-                    activity.runOnUiThread(
-                        () -> {
-                          dialog.close();
-                          onDownloadComplete.call(success);
-                        });
-                  });
+              try {
+                downloadAsync(
+                    url,
+                    destination,
+                    interruptRef,
+                    (progress) -> {
+                      activity.runOnUiThread(
+                          () -> {
+                            dialog.setProgress(progress);
+                          });
+                    },
+                    (success) -> {
+                      if (!success && destination.isFile()) destination.delete();
+                      activity.runOnUiThread(
+                          () -> {
+                            dialog.close();
+                            onDownloadComplete.call(success);
+                          });
+                    });
+              } finally {
+                executor.shutdown();
+              }
             });
   }
 }

@@ -10,7 +10,6 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Bundle
-import android.os.Process
 import android.provider.DocumentsContract
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -519,6 +518,7 @@ class UnifiedActivity :
     override fun onPause() {
         super.onPause()
         chasingBordersPaused.value = true
+        UpdateChecker.stopBackgroundLoop()
     }
 
     override fun onResume() {
@@ -697,6 +697,16 @@ class UnifiedActivity :
         super.onNewIntent(intent)
         setIntent(intent)
         handleSettingsIntent(intent)
+    }
+
+    private fun requestAppExit() {
+        UpdateChecker.stopBackgroundLoop()
+        UpdateChecker.cancelPostGameCheck()
+        PluviaApp.events.emit(AndroidEvent.EndProcess)
+        SteamService.stop()
+        EpicService.stop()
+        GOGService.stop()
+        finishAndRemoveTask()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1474,9 +1484,7 @@ class UnifiedActivity :
                             // Exit button
                             Button(
                                 onClick = {
-                                    // Kill all WinNative processes and close fully
-                                    finishAffinity()
-                                    Process.killProcess(Process.myPid())
+                                    requestAppExit()
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
                                 shape = RoundedCornerShape(12.dp),
