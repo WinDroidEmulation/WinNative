@@ -13,6 +13,7 @@ import android.view.MotionEvent;
 import androidx.preference.PreferenceManager;
 import com.winlator.cmod.runtime.display.XServerDisplayActivity;
 import com.winlator.cmod.runtime.display.xserver.XServer;
+import com.winlator.cmod.runtime.input.controls.ControllerManager;
 import com.winlator.cmod.runtime.input.controls.ControlsProfile;
 import com.winlator.cmod.runtime.input.controls.ExternalController;
 import com.winlator.cmod.runtime.input.controls.FakeInputWriter;
@@ -83,6 +84,7 @@ public class WinHandler {
   private LocalServerSocket vibrationServer;
   private volatile boolean vibrationRunning = false;
   private final boolean[] vibrationEnabledSlots = new boolean[MAX_CONTROLLERS];
+  private boolean globalVibrationEnabled = true;
   private int fallbackSlot = -1;
   private ExternalController currentController;
   private final GamepadState outputGamepadState = new GamepadState();
@@ -125,6 +127,8 @@ public class WinHandler {
         this.vibrationEnabledSlots[i] = this.preferences.getBoolean(legacyKey, true);
       }
     }
+    this.globalVibrationEnabled =
+        this.preferences.getBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, true);
   }
 
   public int preAssignConnectedControllers() {
@@ -753,6 +757,9 @@ public class WinHandler {
   }
 
   private void triggerVibration(int strong, int weak, int durationMs, int slot) {
+    if (!this.globalVibrationEnabled) {
+      return;
+    }
     if (slot >= 0 && slot < MAX_CONTROLLERS && !this.vibrationEnabledSlots[slot]) {
       return;
     }
@@ -829,6 +836,15 @@ public class WinHandler {
         .putBoolean("vibration_slot_" + slot, enabled)
         .putBoolean("vibrate_slot_" + slot, enabled)
         .apply();
+  }
+
+  public boolean isGlobalVibrationEnabled() {
+    return this.globalVibrationEnabled;
+  }
+
+  public void setGlobalVibrationEnabled(boolean enabled) {
+    this.globalVibrationEnabled = enabled;
+    this.preferences.edit().putBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, enabled).apply();
   }
 
   public int getMaxControllers() {

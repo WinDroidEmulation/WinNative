@@ -3552,6 +3552,7 @@ public class XServerDisplayActivity extends AppCompatActivity {
         dialog.getShowTouchscreenControls().setValue(inputControlsView.isShowTouchscreenControls());
         dialog.getTouchscreenTimeout().setValue(preferences.getBoolean("touchscreen_timeout_enabled", false));
         dialog.getTouchscreenHaptics().setValue(preferences.getBoolean("touchscreen_haptics_enabled", false));
+        dialog.getGamepadVibration().setValue(preferences.getBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, true));
 
         final Runnable updateProfile = () -> {
             int position = dialog.getSelectedProfileIndex().getIntValue();
@@ -3581,11 +3582,16 @@ public class XServerDisplayActivity extends AppCompatActivity {
             inputControlsView.setShowTouchscreenControls(dialog.getShowTouchscreenControls().getValue());
             boolean isTimeoutEnabled = dialog.getTouchscreenTimeout().getValue();
             boolean isHapticsEnabled = dialog.getTouchscreenHaptics().getValue();
+            boolean isGamepadVibrationEnabled = dialog.getGamepadVibration().getValue();
             SharedPreferences.Editor editor = preferences.edit();
             editor.putBoolean("show_touchscreen_controls_enabled", dialog.getShowTouchscreenControls().getValue());
             editor.putBoolean("touchscreen_timeout_enabled", isTimeoutEnabled);
             editor.putBoolean("touchscreen_haptics_enabled", isHapticsEnabled);
+            editor.putBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, isGamepadVibrationEnabled);
             editor.apply();
+            if (winHandler != null) {
+                winHandler.setGlobalVibrationEnabled(isGamepadVibrationEnabled);
+            }
 
             if (isTimeoutEnabled) {
                 startTouchscreenTimeout();

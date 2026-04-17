@@ -31,10 +31,12 @@ public class ControllerManager {
   private final SparseArray<String> slotAssignments = new SparseArray<>();
   private final boolean[] enabledSlots = new boolean[4];
   private final boolean[] vibrationEnabled = new boolean[] {true, true, true, true};
+  private boolean globalVibrationEnabled = true;
 
   public static final String PREF_PLAYER_SLOT_PREFIX = "controller_slot_";
   public static final String PREF_ENABLED_SLOTS_PREFIX = "enabled_slot_";
   public static final String PREF_VIBRATE_SLOT_PREFIX = "vibrate_slot_";
+  public static final String PREF_VIBRATION_GLOBAL = "vibration_enabled_global";
 
   public void init(Context context) {
     this.context = context.getApplicationContext();
@@ -69,6 +71,7 @@ public class ControllerManager {
       enabledSlots[i] = preferences.getBoolean(PREF_ENABLED_SLOTS_PREFIX + i, i == 0);
       vibrationEnabled[i] = preferences.getBoolean(PREF_VIBRATE_SLOT_PREFIX + i, i == 0);
     }
+    globalVibrationEnabled = preferences.getBoolean(PREF_VIBRATION_GLOBAL, true);
   }
 
   public void saveAssignments() {
@@ -83,6 +86,7 @@ public class ControllerManager {
       editor.putBoolean(PREF_ENABLED_SLOTS_PREFIX + i, enabledSlots[i]);
       editor.putBoolean(PREF_VIBRATE_SLOT_PREFIX + i, vibrationEnabled[i]);
     }
+    editor.putBoolean(PREF_VIBRATION_GLOBAL, globalVibrationEnabled);
     editor.apply();
   }
 
@@ -161,6 +165,15 @@ public class ControllerManager {
   public void setVibrationEnabled(int slot, boolean enabled) {
     if (slot < 0 || slot >= 4) return;
     vibrationEnabled[slot] = enabled;
+    saveAssignments();
+  }
+
+  public boolean isGlobalVibrationEnabled() {
+    return globalVibrationEnabled;
+  }
+
+  public void setGlobalVibrationEnabled(boolean enabled) {
+    globalVibrationEnabled = enabled;
     saveAssignments();
   }
 }

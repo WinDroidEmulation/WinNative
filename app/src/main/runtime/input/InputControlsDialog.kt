@@ -25,6 +25,7 @@ class InputControlsDialog(
     val showTouchscreenControls = mutableStateOf(true)
     val touchscreenTimeout = mutableStateOf(false)
     val touchscreenHaptics = mutableStateOf(false)
+    val gamepadVibration = mutableStateOf(true)
 
     var onConfirmCallback: Runnable? = null
     var onCancelCallback: Runnable? = null
@@ -62,6 +63,7 @@ class InputControlsDialog(
                                 showTouchscreenControls = showTouchscreenControls.value,
                                 touchscreenTimeout = touchscreenTimeout.value,
                                 touchscreenHaptics = touchscreenHaptics.value,
+                                gamepadVibration = gamepadVibration.value,
                             ),
                         onProfileSelected = { index ->
                             selectedProfileIndex.intValue = index
@@ -73,6 +75,7 @@ class InputControlsDialog(
                         onShowTouchscreenControlsChange = { showTouchscreenControls.value = it },
                         onTouchscreenTimeoutChange = { touchscreenTimeout.value = it },
                         onTouchscreenHapticsChange = { touchscreenHaptics.value = it },
+                        onGamepadVibrationChange = { gamepadVibration.value = it },
                         onCancel = {
                             onCancelCallback?.run()
                             dismiss()

@@ -59,6 +59,7 @@ data class InputControlsState(
     val showTouchscreenControls: Boolean = true,
     val touchscreenTimeout: Boolean = false,
     val touchscreenHaptics: Boolean = false,
+    val gamepadVibration: Boolean = true,
 )
 
 @Composable
@@ -69,6 +70,7 @@ fun InputControlsDialogContent(
     onShowTouchscreenControlsChange: (Boolean) -> Unit,
     onTouchscreenTimeoutChange: (Boolean) -> Unit,
     onTouchscreenHapticsChange: (Boolean) -> Unit,
+    onGamepadVibrationChange: (Boolean) -> Unit,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -142,6 +144,12 @@ fun InputControlsDialogContent(
                 label = stringResource(R.string.settings_general_touchscreen_haptics),
                 checked = state.touchscreenHaptics,
                 onCheckedChange = onTouchscreenHapticsChange,
+            )
+            Spacer(Modifier.height(4.dp))
+            OptionCheckbox(
+                label = stringResource(R.string.session_gamepad_enable_vibration),
+                checked = state.gamepadVibration,
+                onCheckedChange = onGamepadVibrationChange,
             )
 
             Spacer(Modifier.height(18.dp))
