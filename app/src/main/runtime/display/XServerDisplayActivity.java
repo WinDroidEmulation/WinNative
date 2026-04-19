@@ -282,6 +282,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private boolean[] hudElements = new boolean[]{true, true, true, true, true, true};
     private boolean dualSeriesBattery = false;
     private boolean hudCardExpanded = false;
+    private boolean gyroscopeCardExpanded = false;
     private XServerDrawerStateHolder drawerStateHolder;
     private XServerDrawerActionListener drawerActionListener;
 
@@ -2307,6 +2308,61 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }
     }
 
+    private String currentGyroActivatorLabel() {
+        String[] names = getResources().getStringArray(R.array.button_options);
+        int[] keycodes = getResources().getIntArray(R.array.button_keycodes);
+        int currentKeycode = preferences.getInt("gyro_trigger_button", KeyEvent.KEYCODE_BUTTON_L1);
+        int index = -1;
+        for (int i = 0; i < keycodes.length; i++) {
+            if (keycodes[i] == currentKeycode) {
+                index = i;
+                break;
+            }
+        }
+        if (index == -1) index = 6; // Default to L1
+        return index < names.length ? names[index] : names[0];
+    }
+
+    private void showGyroActivatorPicker() {
+        final ComposeView dialogComposeView = findViewById(R.id.DialogComposeView);
+        final ComposeView navigationComposeView = findViewById(R.id.NavigationComposeView);
+        if (dialogComposeView == null) return;
+
+        String[] names = getResources().getStringArray(R.array.button_options);
+        int[] keycodes = getResources().getIntArray(R.array.button_keycodes);
+
+        dialogComposeView.setVisibility(View.VISIBLE);
+        dialogComposeView.setFocusable(true);
+        dialogComposeView.setClickable(true);
+        
+        XServerDrawerMenuKt.setupGyroActivatorDialog(
+            dialogComposeView,
+            currentGyroActivatorLabel(),
+            names,
+            keycodes,
+            () -> {
+                dialogComposeView.setVisibility(View.GONE);
+                dialogComposeView.setContent(null);
+                dialogComposeView.setFocusable(false);
+                dialogComposeView.setClickable(false);
+                dialogComposeView.clearFocus();
+                if (navigationComposeView != null) navigationComposeView.requestFocus();
+                return kotlin.Unit.INSTANCE;
+            },
+            (keycode) -> {
+                preferences.edit().putInt("gyro_trigger_button", keycode).apply();
+                dialogComposeView.setVisibility(View.GONE);
+                dialogComposeView.setContent(null);
+                dialogComposeView.setFocusable(false);
+                dialogComposeView.setClickable(false);
+                dialogComposeView.clearFocus();
+                if (navigationComposeView != null) navigationComposeView.requestFocus();
+                renderDrawerMenu();
+                return kotlin.Unit.INSTANCE;
+            }
+        );
+    }
+
     private void renderDrawerMenu() {
         ComposeView navigationComposeView = findViewById(R.id.NavigationComposeView);
         if (navigationComposeView == null) return;
@@ -2327,6 +2383,19 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 hudElements,
                 dualSeriesBattery,
                 hudCardExpanded,
+                preferences.getBoolean("gyro_enabled", false),
+                preferences.getInt("gyro_mode", 0),
+                currentGyroActivatorLabel(),
+                preferences.getBoolean("process_gyro_with_left_trigger", false),
+                preferences.getBoolean("mouse_gyro_enabled", false),
+                preferences.getFloat("gyro_mouse_scale", 50.0f),
+                preferences.getFloat("gyro_x_sensitivity", 1.0f),
+                preferences.getFloat("gyro_y_sensitivity", 1.0f),
+                preferences.getFloat("gyro_smoothing", 0.9f),
+                preferences.getFloat("gyro_deadzone", 0.05f),
+                preferences.getBoolean("invert_gyro_x", false),
+                preferences.getBoolean("invert_gyro_y", false),
+                gyroscopeCardExpanded,
                 xServerView != null ? xServerView.getRenderer().getFpsLimit() : 0
         );
 
@@ -2372,6 +2441,83 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     @Override
                     public void onHUDCardExpandedChanged(boolean expanded) {
                         hudCardExpanded = expanded;
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onGyroscopeEnabledChanged(boolean enabled) {
+                        preferences.edit().putBoolean("gyro_enabled", enabled).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onGyroscopeModeSelected(int mode) {
+                        preferences.edit().putInt("gyro_mode", mode).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onGyroscopeActivatorClick() {
+                        showGyroActivatorPicker();
+                    }
+
+                    @Override
+                    public void onRightStickGyroChanged(boolean enabled) {
+                        preferences.edit().putBoolean("process_gyro_with_left_trigger", enabled).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onGyroMouseEnabledChanged(boolean enabled) {
+                        preferences.edit().putBoolean("mouse_gyro_enabled", enabled).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onGyroMouseScaleChanged(float scale) {
+                        preferences.edit().putFloat("gyro_mouse_scale", scale).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onGyroXSensitivityChanged(float sensitivity) {
+                        preferences.edit().putFloat("gyro_x_sensitivity", sensitivity).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onGyroYSensitivityChanged(float sensitivity) {
+                        preferences.edit().putFloat("gyro_y_sensitivity", sensitivity).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onGyroSmoothingChanged(float smoothing) {
+                        preferences.edit().putFloat("gyro_smoothing", smoothing).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onGyroDeadzoneChanged(float deadzone) {
+                        preferences.edit().putFloat("gyro_deadzone", deadzone).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onInvertGyroXChanged(boolean enabled) {
+                        preferences.edit().putBoolean("invert_gyro_x", enabled).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onInvertGyroYChanged(boolean enabled) {
+                        preferences.edit().putBoolean("invert_gyro_y", enabled).apply();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onGyroscopeCardExpandedChanged(boolean expanded) {
+                        gyroscopeCardExpanded = expanded;
                         renderDrawerMenu();
                     }
 
@@ -2454,9 +2600,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private boolean handleDrawerAction(int itemId) {
         final GLRenderer renderer = xServerView.getRenderer();
         switch (itemId) {
-            case R.id.main_menu_gyroscope:
-                showGyroSettingsDialog();
-                drawerLayout.closeDrawers();
+            case R.id.main_menu_gyroscope_reset:
+                if (winHandler != null) {
+                    winHandler.updateGyroData(0, 0); // This effectively resets it
+                }
                 break;
             case R.id.main_menu_keyboard:
                 AppUtils.showKeyboard(this);
@@ -3657,52 +3804,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         });
     }
 
-    private void showGyroSettingsDialog() {
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
-        builder.setTitle("Gyroscope Settings");
-        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
-        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
-        layout.setPadding(50, 40, 50, 10);
 
-        final android.widget.CheckBox cbEnabled = new android.widget.CheckBox(this);
-        cbEnabled.setText("Enable Gyroscope");
-        cbEnabled.setChecked(preferences.getBoolean("gyro_enabled", false));
-        layout.addView(cbEnabled);
-
-        final android.widget.CheckBox cbMouse = new android.widget.CheckBox(this);
-        cbMouse.setText("Mouse Emulation");
-        cbMouse.setChecked(preferences.getBoolean("mouse_gyro_enabled", false));
-        layout.addView(cbMouse);
-
-        android.widget.TextView scaleLabel = new android.widget.TextView(this);
-        scaleLabel.setText("Mouse Scale");
-        layout.addView(scaleLabel);
-
-        final android.widget.SeekBar scaleSlider = new android.widget.SeekBar(this);
-        scaleSlider.setMax(200);
-        scaleSlider.setProgress((int)preferences.getFloat("gyro_mouse_scale", 50.0f));
-        layout.addView(scaleSlider);
-
-        builder.setView(layout);
-
-        builder.setPositiveButton("OK", (dialog, which) -> {
-            SharedPreferences.Editor editor = preferences.edit();
-            editor.putBoolean("gyro_enabled", cbEnabled.isChecked());
-            editor.putBoolean("mouse_gyro_enabled", cbMouse.isChecked());
-            editor.putFloat("gyro_mouse_scale", (float)scaleSlider.getProgress());
-            editor.apply();
-            
-            boolean gyroEnabled = cbEnabled.isChecked() || cbMouse.isChecked();
-            if (gyroEnabled) {
-                sensorManager.registerListener(gyroListener, gyroSensor, SensorManager.SENSOR_DELAY_GAME);
-            } else {
-                sensorManager.unregisterListener(gyroListener);
-            }
-        });
-
-        builder.setNegativeButton("Cancel", null);
-        builder.show();
-    }
 
     private void showInputControlsDialog() {
         final InputControlsDialog dialog = new InputControlsDialog(this);

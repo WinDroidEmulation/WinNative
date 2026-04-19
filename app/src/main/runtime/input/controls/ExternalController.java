@@ -582,6 +582,14 @@ public class ExternalController {
         return 7;
       case 109:
         return 6;
+      case 19:
+        return 13;
+      case 20:
+        return 14;
+      case 21:
+        return 15;
+      case 22:
+        return 16;
       default:
         return -1;
     }

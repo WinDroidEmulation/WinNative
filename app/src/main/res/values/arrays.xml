@@ -201,6 +201,10 @@
         <item>Select</item>
         <item>R3 (Right Stick Button)</item>
         <item>L3 (Left Stick Button)</item>
+        <item>D-pad Up</item>
+        <item>D-pad Down</item>
+        <item>D-pad Left</item>
+        <item>D-pad Right</item>
     </string-array>
     <integer-array name="button_keycodes">
         <item>@integer/keycode_button_a</item>
@@ -214,7 +218,11 @@
         <item>@integer/keycode_button_start</item>
         <item>@integer/keycode_button_select</item>
         <item>@integer/keycode_button_r3</item> 
-        <item>@integer/keycode_button_l3</item> 
+        <item>@integer/keycode_button_l3</item>
+        <item>@integer/keycode_dpad_up</item>
+        <item>@integer/keycode_dpad_down</item>
+        <item>@integer/keycode_dpad_left</item>
+        <item>@integer/keycode_dpad_right</item>
     </integer-array>
 
     <string-array name="emulator_entries">

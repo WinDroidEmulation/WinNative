@@ -1356,13 +1356,13 @@ public class WinHandler {
     int buttonIdx = ExternalController.getButtonIdxByKeyCode(keyCode);
     if (buttonIdx == GamepadState.BUTTON_L2) {
       return state.triggerL > GYRO_TRIGGER_PRESS_THRESHOLD
-          || state.isPressed(GamepadState.BUTTON_L2);
+          || state.isButtonPressed(GamepadState.BUTTON_L2);
     }
     if (buttonIdx == GamepadState.BUTTON_R2) {
       return state.triggerR > GYRO_TRIGGER_PRESS_THRESHOLD
-          || state.isPressed(GamepadState.BUTTON_R2);
+          || state.isButtonPressed(GamepadState.BUTTON_R2);
     }
-    return buttonIdx != -1 && state.isPressed(buttonIdx);
+    return buttonIdx != -1 && state.isButtonPressed(buttonIdx);
   }
 
   private GamepadState getOutputGamepadState(GamepadState baseState, boolean applyGyroOverlay) {

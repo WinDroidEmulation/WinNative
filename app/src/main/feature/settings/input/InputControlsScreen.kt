@@ -111,6 +111,8 @@ data class InputControlsScreenState(
     val gyroscopeModeIndex: Int = 0,
     val gyroscopeActivatorLabel: String = "",
     val rightStickGyroEnabled: Boolean = false,
+    val gyroMouseEnabled: Boolean = false,
+    val gyroMouseScale: Int = 50,
     val gyroscopeExpanded: Boolean = false,
     val gyroXSensitivity: Int = 100,
     val gyroYSensitivity: Int = 100,
@@ -194,6 +196,8 @@ data class InputControlsScreenActions(
     val onGyroscopeModeSelected: (Int) -> Unit,
     val onGyroscopeActivatorClick: () -> Unit,
     val onRightStickGyroChanged: (Boolean) -> Unit,
+    val onGyroMouseEnabledChanged: (Boolean) -> Unit,
+    val onGyroMouseScaleChanged: (Int) -> Unit,
     val onGyroscopeExpandedChanged: (Boolean) -> Unit,
     val onGyroXSensitivityChanged: (Int) -> Unit,
     val onGyroYSensitivityChanged: (Int) -> Unit,
@@ -1644,6 +1648,41 @@ private fun GyroscopeCard(
                 AppSwitch(
                     checked = state.rightStickGyroEnabled,
                     onCheckedChange = actions.onRightStickGyroChanged,
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.session_gyroscope_experimental_mouse_movement),
+                    color = InputTextSecondary,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = stringResource(R.string.common_ui_experimental),
+                    color = InputAccent,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.width(8.dp))
+                AppSwitch(
+                    checked = state.gyroMouseEnabled,
+                    onCheckedChange = actions.onGyroMouseEnabledChanged,
+                )
+            }
+
+            if (state.gyroMouseEnabled) {
+                Spacer(Modifier.height(8.dp))
+                SliderField(
+                    label = stringResource(R.string.session_gyroscope_mouse_sensitivity_format, state.gyroMouseScale),
+                    value = state.gyroMouseScale.toFloat(),
+                    valueRange = 0f..200f,
+                    steps = 199,
+                    onValueChange = { actions.onGyroMouseScaleChanged(it.roundToInt().coerceIn(0, 200)) },
                 )
             }
 

@@ -174,6 +174,14 @@ class InputControlsFragment : Fragment() {
                                     preferences.edit().putBoolean("process_gyro_with_left_trigger", enabled).apply()
                                     publishUiState()
                                 },
+                                onGyroMouseEnabledChanged = { enabled ->
+                                    preferences.edit().putBoolean("mouse_gyro_enabled", enabled).apply()
+                                    publishUiState()
+                                },
+                                onGyroMouseScaleChanged = { value ->
+                                    preferences.edit().putFloat("gyro_mouse_scale", value.toFloat()).apply()
+                                    publishUiState()
+                                },
                                 onGyroscopeExpandedChanged = { expanded ->
                                     gyroscopeExpanded = expanded
                                     if (!expanded) detachGyroPreview()
@@ -316,6 +324,8 @@ class InputControlsFragment : Fragment() {
                 gyroscopeModeIndex = preferences.getInt("gyro_mode", 0),
                 gyroscopeActivatorLabel = currentGyroActivatorLabel(),
                 rightStickGyroEnabled = preferences.getBoolean("process_gyro_with_left_trigger", false),
+                gyroMouseEnabled = preferences.getBoolean("mouse_gyro_enabled", false),
+                gyroMouseScale = preferences.getFloat("gyro_mouse_scale", 50.0f).toInt(),
                 gyroscopeExpanded = gyroscopeExpanded,
                 gyroXSensitivity = (preferences.getFloat("gyro_x_sensitivity", 1.0f) * 100).toInt(),
                 gyroYSensitivity = (preferences.getFloat("gyro_y_sensitivity", 1.0f) * 100).toInt(),

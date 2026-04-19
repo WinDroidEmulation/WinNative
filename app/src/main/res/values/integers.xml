@@ -12,4 +12,8 @@
     <integer name="keycode_button_select">109</integer> <!-- KeyEvent.KEYCODE_BUTTON_SELECT -->
     <integer name="keycode_button_r3">106</integer> <!-- KeyEvent.KEYCODE_BUTTON_R3 -->
     <integer name="keycode_button_l3">107</integer> <!-- KeyEvent.KEYCODE_BUTTON_L3 -->
+    <integer name="keycode_dpad_up">19</integer> <!-- KeyEvent.KEYCODE_DPAD_UP -->
+    <integer name="keycode_dpad_down">20</integer> <!-- KeyEvent.KEYCODE_DPAD_DOWN -->
+    <integer name="keycode_dpad_left">21</integer> <!-- KeyEvent.KEYCODE_DPAD_LEFT -->
+    <integer name="keycode_dpad_right">22</integer> <!-- KeyEvent.KEYCODE_DPAD_RIGHT -->
 </resources>

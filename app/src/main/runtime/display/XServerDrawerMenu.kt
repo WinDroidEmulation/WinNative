@@ -114,6 +114,7 @@ private val DrawerExitTint = Color(0xFFE07A84)
 
 private val DrawerPrimaryItemIds =
     setOf(
+        R.id.main_menu_gyroscope,
         R.id.main_menu_keyboard,
         R.id.main_menu_input_controls,
         R.id.main_menu_fps_monitor,
@@ -143,6 +144,19 @@ data class XServerDrawerState(
     val hudElements: BooleanArray = booleanArrayOf(true, true, true, true, true, true),
     val dualSeriesBatteryEnabled: Boolean = false,
     val hudCardExpanded: Boolean = false,
+    val gyroscopeEnabled: Boolean = false,
+    val gyroscopeModeIndex: Int = 0,
+    val gyroscopeActivatorLabel: String = "",
+    val rightStickGyroEnabled: Boolean = false,
+    val gyroMouseEnabled: Boolean = false,
+    val gyroMouseScale: Float = 50.0f,
+    val gyroXSensitivity: Float = 1.0f,
+    val gyroYSensitivity: Float = 1.0f,
+    val gyroSmoothing: Float = 0.9f,
+    val gyroDeadzone: Float = 0.05f,
+    val invertGyroX: Boolean = false,
+    val invertGyroY: Boolean = false,
+    val gyroscopeCardExpanded: Boolean = false,
     val fpsLimit: Int = 0,
 )
 
@@ -168,6 +182,32 @@ interface XServerDrawerActionListener {
 
     fun onHUDCardExpandedChanged(expanded: Boolean)
 
+    fun onGyroscopeEnabledChanged(enabled: Boolean)
+
+    fun onGyroscopeModeSelected(mode: Int)
+
+    fun onGyroscopeActivatorClick()
+
+    fun onRightStickGyroChanged(enabled: Boolean)
+
+    fun onGyroMouseEnabledChanged(enabled: Boolean)
+
+    fun onGyroMouseScaleChanged(scale: Float)
+
+    fun onGyroXSensitivityChanged(sensitivity: Float)
+
+    fun onGyroYSensitivityChanged(sensitivity: Float)
+
+    fun onGyroSmoothingChanged(smoothing: Float)
+
+    fun onGyroDeadzoneChanged(deadzone: Float)
+
+    fun onInvertGyroXChanged(enabled: Boolean)
+
+    fun onInvertGyroYChanged(enabled: Boolean)
+
+    fun onGyroscopeCardExpandedChanged(expanded: Boolean)
+
     fun onFPSLimitChanged(limit: Int)
 }
 
@@ -187,16 +227,23 @@ fun buildXServerDrawerState(
     hudElements: BooleanArray = booleanArrayOf(true, true, true, true, true, true),
     dualSeriesBatteryEnabled: Boolean = false,
     hudCardExpanded: Boolean = false,
+    gyroscopeEnabled: Boolean = false,
+    gyroscopeModeIndex: Int = 0,
+    gyroscopeActivatorLabel: String = "",
+    rightStickGyroEnabled: Boolean = false,
+    gyroMouseEnabled: Boolean = false,
+    gyroMouseScale: Float = 50.0f,
+    gyroXSensitivity: Float = 1.0f,
+    gyroYSensitivity: Float = 1.0f,
+    gyroSmoothing: Float = 0.9f,
+    gyroDeadzone: Float = 0.05f,
+    invertGyroX: Boolean = false,
+    invertGyroY: Boolean = false,
+    gyroscopeCardExpanded: Boolean = false,
     fpsLimit: Int = 0,
 ): XServerDrawerState {
     val items =
         mutableListOf(
-            XServerDrawerItem(
-                itemId = R.id.main_menu_gyroscope,
-                title = "Gyroscope",
-                subtitle = "Configure Gyroscope Controls",
-                icon = Icons.Outlined.SportsEsports,
-            ),
             XServerDrawerItem(
                 itemId = R.id.main_menu_fps_monitor,
                 title = context.getString(R.string.session_drawer_fps_monitor),
@@ -216,6 +263,13 @@ fun buildXServerDrawerState(
                 title = context.getString(R.string.common_ui_input_controls),
                 subtitle = context.getString(R.string.session_drawer_input_controls_subtitle),
                 icon = Icons.Outlined.SportsEsports,
+            ),
+            XServerDrawerItem(
+                itemId = R.id.main_menu_gyroscope,
+                title = "Gyroscope",
+                subtitle = "Configure Gyroscope Controls",
+                icon = Icons.Outlined.SportsEsports,
+                active = gyroscopeEnabled,
             ),
             XServerDrawerItem(
                 itemId = R.id.main_menu_relative_mouse_movement,
@@ -325,6 +379,19 @@ fun buildXServerDrawerState(
         hudElements = hudElements,
         dualSeriesBatteryEnabled = dualSeriesBatteryEnabled,
         hudCardExpanded = hudCardExpanded,
+        gyroscopeEnabled = gyroscopeEnabled,
+        gyroscopeModeIndex = gyroscopeModeIndex,
+        gyroscopeActivatorLabel = gyroscopeActivatorLabel,
+        rightStickGyroEnabled = rightStickGyroEnabled,
+        gyroMouseEnabled = gyroMouseEnabled,
+        gyroMouseScale = gyroMouseScale,
+        gyroXSensitivity = gyroXSensitivity,
+        gyroYSensitivity = gyroYSensitivity,
+        gyroSmoothing = gyroSmoothing,
+        gyroDeadzone = gyroDeadzone,
+        invertGyroX = invertGyroX,
+        invertGyroY = invertGyroY,
+        gyroscopeCardExpanded = gyroscopeCardExpanded,
         fpsLimit = fpsLimit,
     )
 }
@@ -379,18 +446,29 @@ private fun XServerDrawerContent(
         ) {
             DrawerHeroCard()
             primaryItems.forEach { item ->
-                if (item.itemId == R.id.main_menu_fps_monitor) {
-                    XServerHUDCard(
-                        item = item,
-                        state = state,
-                        listener = listener,
-                        onToggleMonitor = { listener.onActionSelected(item.itemId) },
-                    )
-                } else {
-                    XServerDrawerActionCard(
-                        item = item,
-                        onClick = { listener.onActionSelected(item.itemId) },
-                    )
+                when (item.itemId) {
+                    R.id.main_menu_fps_monitor -> {
+                        XServerHUDCard(
+                            item = item,
+                            state = state,
+                            listener = listener,
+                            onToggleMonitor = { listener.onActionSelected(item.itemId) },
+                        )
+                    }
+                    R.id.main_menu_gyroscope -> {
+                        XServerGyroscopeCard(
+                            item = item,
+                            state = state,
+                            listener = listener,
+                            onToggleGyro = { listener.onGyroscopeEnabledChanged(!state.gyroscopeEnabled) },
+                        )
+                    }
+                    else -> {
+                        XServerDrawerActionCard(
+                            item = item,
+                            onClick = { listener.onActionSelected(item.itemId) },
+                        )
+                    }
                 }
             }
 
@@ -401,6 +479,103 @@ private fun XServerDrawerContent(
                 )
             }
             Spacer(Modifier.height(6.dp))
+        }
+    }
+}
+
+fun setupGyroActivatorDialog(
+    composeView: androidx.compose.ui.platform.ComposeView,
+    currentLabel: String,
+    names: Array<String>,
+    keycodes: IntArray,
+    onDismiss: () -> Unit,
+    onSelected: (Int) -> Unit
+) {
+    composeView.setViewCompositionStrategy(androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+    composeView.setContent {
+        WinNativeTheme {
+            XServerGyroscopeActivatorDialog(
+                currentLabel = currentLabel,
+                names = names,
+                keycodes = keycodes,
+                onDismiss = onDismiss,
+                onSelected = onSelected
+            )
+        }
+    }
+}
+
+@Composable
+fun XServerGyroscopeActivatorDialog(
+    currentLabel: String,
+    onDismiss: () -> Unit,
+    onSelected: (Int) -> Unit,
+    names: Array<String>,
+    keycodes: IntArray,
+) {
+    WinNativeDialogShell(
+        onDismiss = onDismiss,
+        title = stringResource(R.string.session_gyroscope_activator_button),
+        maxWidth = 400.dp,
+    ) {
+        Box(modifier = Modifier.fillMaxWidth().clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = {} // Intercept clicks so they don't hit the background
+        )) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(300.dp)
+                        .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                names.forEachIndexed { index, name ->
+                    val isSelected = name == currentLabel
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val pressed = interactionSource.collectIsPressedAsState().value
+                    val bgColor by animateColorAsState(
+                        targetValue = if (isSelected) WinNativeAccent.copy(alpha = 0.16f) else if (pressed) WinNativeSurfaceAlt else Color.Transparent,
+                        label = "activatorBg",
+                    )
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(bgColor)
+                            .border(
+                                1.dp,
+                                if (isSelected) WinNativeAccent.copy(alpha = 0.34f) else Color.Transparent,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = { onSelected(keycodes[index]) }
+                            )
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = name,
+                            color = if (isSelected) WinNativeAccent else WinNativeTextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = null,
+                                tint = WinNativeAccent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1036,6 +1211,336 @@ private fun DrawerBooleanRow(
                 interactionSource = switchInteractionSource,
                 colors = outlinedSwitchColors(WinNativeAccent, WinNativeTextSecondary),
             )
+        }
+    }
+}
+
+@Composable
+private fun XServerGyroscopeCard(
+    item: XServerDrawerItem,
+    state: XServerDrawerState,
+    listener: XServerDrawerActionListener,
+    onToggleGyro: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed = interactionSource.collectIsPressedAsState().value
+    val statusInteractionSource = remember { MutableInteractionSource() }
+    val active = item.active
+    val expanded = active && state.gyroscopeCardExpanded
+    val cardClick =
+        if (active) {
+            { listener.onGyroscopeCardExpandedChanged(!state.gyroscopeCardExpanded) }
+        } else {
+            onToggleGyro
+        }
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.985f else 1f,
+        animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
+        label = "gyroCardScale",
+    )
+    val cardColor by animateColorAsState(
+        targetValue =
+            when {
+                active -> DrawerActiveSurface
+                pressed -> WinNativeSurfaceAlt
+                else -> WinNativeSurface
+            },
+        animationSpec = tween(180),
+        label = "gyroCardColor",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (active) WinNativeAccent.copy(alpha = 0.34f) else WinNativeOutline,
+        animationSpec = tween(180),
+        label = "gyroCardBorder",
+    )
+    val iconBoxColor by animateColorAsState(
+        targetValue = if (active) WinNativeAccent.copy(alpha = 0.16f) else DrawerIconBox,
+        animationSpec = tween(180),
+        label = "gyroIconBoxColor",
+    )
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "gyroChevronRotation",
+    )
+    val subtitle =
+        when {
+            !active -> stringResource(R.string.session_drawer_hud_disabled_hint)
+            expanded -> "Configure all gyroscope settings"
+            else -> item.subtitle
+        }
+    val shape = RoundedCornerShape(20.dp)
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }.clip(shape)
+                .background(cardColor)
+                .border(BorderStroke(1.dp, borderColor), shape),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = cardClick,
+                    ).padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .width(4.dp)
+                        .height(42.dp)
+                        .clip(CircleShape)
+                        .background(if (active) WinNativeAccent else Color.Transparent),
+            )
+            Spacer(Modifier.width(10.dp))
+            Box(
+                modifier =
+                    Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(iconBoxColor),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = item.icon,
+                    contentDescription = null,
+                    tint = if (active) WinNativeAccent else WinNativeTextPrimary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.title,
+                    color = WinNativeTextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = subtitle,
+                    color = WinNativeTextSecondary,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            DrawerStatusPill(
+                text = if (active) stringResource(R.string.common_ui_on) else stringResource(R.string.common_ui_off),
+                active = active,
+                interactionSource = statusInteractionSource,
+                onClick = onToggleGyro,
+            )
+            if (active) {
+                Spacer(Modifier.width(6.dp))
+                val chevronSource = remember { MutableInteractionSource() }
+                Box(
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(WinNativePanel)
+                            .border(1.dp, WinNativeOutline, RoundedCornerShape(12.dp))
+                            .clickable(
+                                interactionSource = chevronSource,
+                                indication = null,
+                                onClick = { listener.onGyroscopeCardExpandedChanged(!state.gyroscopeCardExpanded) },
+                            ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = WinNativeAccent,
+                        modifier =
+                            Modifier
+                                .size(18.dp)
+                                .rotate(chevronRotation),
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(180)) + expandVertically(tween(220, easing = FastOutSlowInEasing)),
+            exit = fadeOut(tween(140)) + shrinkVertically(tween(180, easing = FastOutSlowInEasing)),
+        ) {
+            XServerGyroscopeSettingsExpanded(state = state, listener = listener)
+        }
+    }
+}
+
+@Composable
+private fun XServerGyroscopeSettingsExpanded(
+    state: XServerDrawerState,
+    listener: XServerDrawerActionListener,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(WinNativePanel)
+                    .border(1.dp, WinNativeOutline, RoundedCornerShape(18.dp))
+                    .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.session_gyroscope_mode),
+                    color = WinNativeTextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.3.sp,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        stringResource(R.string.session_gyroscope_hold),
+                        stringResource(R.string.session_gyroscope_toggle),
+                    ).forEachIndexed { index, label ->
+                        HUDToggleChip(
+                            label = label,
+                            checked = state.gyroscopeModeIndex == index,
+                            onClick = { listener.onGyroscopeModeSelected(index) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.session_gyroscope_activator_button),
+                    color = WinNativeTextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.3.sp,
+                )
+                DrawerMetricChip(
+                    label = "Activator",
+                    value = state.gyroscopeActivatorLabel,
+                    onClick = { listener.onGyroscopeActivatorClick() }
+                )
+            }
+
+            DrawerBooleanRow(
+                title = stringResource(R.string.session_gyroscope_enable_right_stick),
+                checked = state.rightStickGyroEnabled,
+                onCheckedChange = listener::onRightStickGyroChanged
+            )
+
+            DrawerBooleanRow(
+                title = stringResource(R.string.session_gyroscope_experimental_mouse_movement),
+                checked = state.gyroMouseEnabled,
+                onCheckedChange = listener::onGyroMouseEnabledChanged
+            )
+
+            if (state.gyroMouseEnabled) {
+                DrawerSliderRow(
+                    label = stringResource(R.string.session_gyroscope_mouse_scale),
+                    valueText = "${state.gyroMouseScale.toInt()}%",
+                    value = state.gyroMouseScale,
+                    valueRange = 0f..200f,
+                    steps = 199,
+                    onValueChange = { listener.onGyroMouseScaleChanged(it.roundToInt().toFloat()) }
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.session_gyroscope_calibrate),
+                    color = WinNativeTextSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.3.sp,
+                )
+                
+                DrawerSliderRow(
+                    label = stringResource(R.string.session_gyroscope_x_sensitivity),
+                    valueText = "${(state.gyroXSensitivity * 100).toInt()}%",
+                    value = state.gyroXSensitivity,
+                    valueRange = 0f..2f,
+                    steps = 199,
+                    onValueChange = { listener.onGyroXSensitivityChanged(it) }
+                )
+
+                DrawerSliderRow(
+                    label = stringResource(R.string.session_gyroscope_y_sensitivity),
+                    valueText = "${(state.gyroYSensitivity * 100).toInt()}%",
+                    value = state.gyroYSensitivity,
+                    valueRange = 0f..2f,
+                    steps = 199,
+                    onValueChange = { listener.onGyroYSensitivityChanged(it) }
+                )
+
+                DrawerSliderRow(
+                    label = stringResource(R.string.session_gyroscope_smoothing),
+                    valueText = "${(state.gyroSmoothing * 100).toInt()}%",
+                    value = state.gyroSmoothing,
+                    valueRange = 0f..1f,
+                    steps = 99,
+                    onValueChange = { listener.onGyroSmoothingChanged(it) }
+                )
+
+                DrawerSliderRow(
+                    label = stringResource(R.string.session_gyroscope_deadzone),
+                    valueText = "${(state.gyroDeadzone * 100).toInt()}%",
+                    value = state.gyroDeadzone,
+                    valueRange = 0f..1f,
+                    steps = 99,
+                    onValueChange = { listener.onGyroDeadzoneChanged(it) }
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    HUDToggleChip(
+                        label = stringResource(R.string.session_gyroscope_invert_x),
+                        checked = state.invertGyroX,
+                        onClick = { listener.onInvertGyroXChanged(!state.invertGyroX) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    HUDToggleChip(
+                        label = stringResource(R.string.session_gyroscope_invert_y),
+                        checked = state.invertGyroY,
+                        onClick = { listener.onInvertGyroYChanged(!state.invertGyroY) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(4.dp))
+                
+                WinNativeDialogButton(
+                    label = stringResource(R.string.session_gyroscope_reset_stick),
+                    textColor = WinNativeAccent,
+                    backgroundColor = WinNativeAccent.copy(alpha = 0.12f),
+                    borderColor = WinNativeAccent.copy(alpha = 0.3f),
+                    onClick = { listener.onActionSelected(R.id.main_menu_gyroscope_reset) }
+                )
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <item type="id" name="DialogComposeView" />
     <item type="id" name="main_menu_google" />
     <item type="id" name="main_menu_stores" />
     <item type="id" name="main_menu_containers" />
@@ -11,6 +12,7 @@
     <item type="id" name="main_menu_other" />
 
     <item type="id" name="main_menu_gyroscope" />
+    <item type="id" name="main_menu_gyroscope_reset" />
     <item type="id" name="main_menu_keyboard" />
     <item type="id" name="main_menu_fps_monitor" />
     <item type="id" name="main_menu_controller_manager" />

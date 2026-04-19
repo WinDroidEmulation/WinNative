@@ -692,11 +692,14 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="session_gyroscope_reset_stick">Reset Stick</string>
     <string name="session_gyroscope_reset_stick_to_center">Reset Stick to Center</string>
     <string name="session_gyroscope_configuration">Gyroscope Configuration</string>
+    <string name="session_gyroscope_experimental_mouse_movement">Experimental Mouse Movement</string>
     <string name="session_gyroscope_x_sensitivity_format">X Sensitivity: %1$d%%</string>
     <string name="session_gyroscope_y_sensitivity_format">Y Sensitivity: %1$d%%</string>
     <string name="session_gyroscope_smoothing_format">Smoothing: %1$d%%</string>
     <string name="session_gyroscope_deadzone_format">Deadzone: %1$d%%</string>
     <string name="session_gyroscope_sensitivity_format">Sensitivity: %1$d%%</string>
+    <string name="session_gyroscope_mouse_scale">Mouse Scale</string>
+    <string name="session_gyroscope_mouse_sensitivity_format">Mouse Scale: %1$d%%</string>
 
     <!-- Settings > General -->
     <string name="settings_general_cursor_speed">Cursor Speed</string>
