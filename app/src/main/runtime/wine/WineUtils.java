@@ -9,7 +9,10 @@ import com.winlator.cmod.runtime.system.GPUInformation;
 import com.winlator.cmod.shared.io.FileUtils;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -187,16 +190,14 @@ public abstract class WineUtils {
       canonicalGameDir = gameDir.getAbsoluteFile();
     }
 
-    String safeSource = source == null || source.isEmpty() ? "Games" : source;
-    String gameName = canonicalGameDir.getName();
-    if (gameName == null || gameName.isEmpty()) gameName = "Game";
-    gameName = gameName.replace("/", "_").replace("\\", "_");
+    String safeSource = sanitizeDriveCGamePathSegment(source);
+    if (safeSource.isEmpty()) safeSource = "Games";
 
     File parentDir =
         new File(container.getRootDir(), ".wine/drive_c/WinNative/Games/" + safeSource);
     if (!parentDir.exists()) parentDir.mkdirs();
 
-    File link = new File(parentDir, gameName);
+    File link = new File(parentDir, buildDriveCGameLinkName(canonicalGameDir));
     boolean needsCreation = !link.exists() && !isSymlink(link);
     if (!needsCreation) {
       try {
@@ -226,6 +227,8 @@ public abstract class WineUtils {
       Container container, String source, String gameInstallPath, String nativePath) {
     if (container == null || gameInstallPath == null || nativePath == null) return null;
     try {
+      String safeSource = sanitizeDriveCGamePathSegment(source);
+      if (safeSource.isEmpty()) safeSource = "Games";
       File gameDir = new File(gameInstallPath).getCanonicalFile();
       File target = new File(nativePath).getCanonicalFile();
       String gameDirPath = gameDir.getPath();
@@ -240,11 +243,23 @@ public abstract class WineUtils {
           targetPath.substring(gameDirPath.length()).replace(File.separatorChar, '\\');
       if (relative.isEmpty()) relative = "\\";
       else if (!relative.startsWith("\\")) relative = "\\" + relative;
-      return "C:\\WinNative\\Games\\" + source + "\\" + symlink.getName() + relative;
+      return "C:\\WinNative\\Games\\" + safeSource + "\\" + symlink.getName() + relative;
     } catch (IOException e) {
       Log.w("WineUtils", "Failed to resolve C: game path for " + nativePath, e);
       return null;
     }
+  }
+
+  public static String getDriveCGameLinkName(String gameInstallPath) {
+    if (gameInstallPath == null || gameInstallPath.isEmpty()) return "Game";
+
+    File gameDir = new File(gameInstallPath);
+    try {
+      gameDir = gameDir.getCanonicalFile();
+    } catch (IOException e) {
+      gameDir = gameDir.getAbsoluteFile();
+    }
+    return buildDriveCGameLinkName(gameDir);
   }
 
   public static String getWindowsPath(Container container, String nativePath) {
@@ -1332,12 +1347,9 @@ public abstract class WineUtils {
     return getDosPath(null, path);
   }
 
-  public static String getDosPath(@Nullable Container container, String path) {
-    if (path == null || path.isEmpty()) return "D:\\";
-    if (container != null) {
-      String mappedPath = hostPathToMappedWinePath(container, path);
-      if (mappedPath != null && !mappedPath.isEmpty()) return mappedPath;
-    }
+  @Nullable
+  public static String tryGetDosPath(String path) {
+    if (path == null || path.isEmpty()) return null;
 
     String normalizedPath = normalizeHostPath(path);
     String downloadsPath =
@@ -1357,10 +1369,18 @@ public abstract class WineUtils {
       if (mappedPath != null) return mappedPath;
     }
 
-    mappedPath = buildDrivePath(normalizedPath, externalStoragePath, "F");
-    if (mappedPath != null) return mappedPath;
+    return buildDrivePath(normalizedPath, externalStoragePath, "F");
+  }
 
-    return "D:\\"; // fallback
+  public static String getDosPath(@Nullable Container container, String path) {
+    if (path == null || path.isEmpty()) return "D:\\";
+    if (container != null) {
+      String mappedPath = hostPathToMappedWinePath(container, path);
+      if (mappedPath != null && !mappedPath.isEmpty()) return mappedPath;
+    }
+
+    String mappedPath = tryGetDosPath(path);
+    return mappedPath != null ? mappedPath : "D:\\";
   }
 
   private static String buildDrivePath(String normalizedPath, String rootPath, String driveLetter) {
@@ -1376,5 +1396,33 @@ public abstract class WineUtils {
     while (relativePath.startsWith("\\")) relativePath = relativePath.substring(1);
     if (relativePath.isEmpty()) return driveLetter + ":\\";
     return driveLetter + ":\\" + relativePath;
+  }
+
+  private static String buildDriveCGameLinkName(File canonicalGameDir) {
+    String gameName = sanitizeDriveCGamePathSegment(canonicalGameDir.getName());
+    if (gameName.isEmpty()) gameName = "Game";
+    if (gameName.length() > 48) gameName = gameName.substring(0, 48);
+    return gameName + "-" + buildShortStableHash(canonicalGameDir.getPath());
+  }
+
+  private static String sanitizeDriveCGamePathSegment(String value) {
+    if (value == null || value.isEmpty()) return "";
+    return value.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+  }
+
+  private static String buildShortStableHash(String value) {
+    if (value == null || value.isEmpty()) return "0000000000";
+
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-1");
+      byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+      StringBuilder hex = new StringBuilder(bytes.length * 2);
+      for (byte b : bytes) {
+        hex.append(String.format(Locale.ENGLISH, "%02x", b & 0xff));
+      }
+      return hex.substring(0, Math.min(10, hex.length()));
+    } catch (NoSuchAlgorithmException e) {
+      return Integer.toHexString(value.hashCode());
+    }
   }
 }

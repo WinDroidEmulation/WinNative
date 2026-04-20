@@ -8598,7 +8598,9 @@ class UnifiedActivity :
                     } catch (_: Exception) {
                         exeFile.name
                     }
-                "C:\\WinNative\\Games\\$source\\${java.io.File(gameInstallPath).name}\\$relativePath"
+                val linkName =
+                    com.winlator.cmod.runtime.wine.WineUtils.getDriveCGameLinkName(gameInstallPath)
+                "C:\\WinNative\\Games\\$source\\$linkName\\$relativePath"
             }
         return "wine \"$windowsPath\""
     }

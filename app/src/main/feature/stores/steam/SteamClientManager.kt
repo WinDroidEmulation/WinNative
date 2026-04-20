@@ -385,7 +385,7 @@ object SteamClientManager {
                         val absolutePath = hostExeFile.absolutePath
                         val mappedStoragePath =
                             if (absolutePath.startsWith("/storage/") || absolutePath.startsWith("/mnt/media_rw/")) {
-                                WineUtils.getDosPath(absolutePath)
+                                WineUtils.tryGetDosPath(absolutePath)
                             } else {
                                 null
                             }
