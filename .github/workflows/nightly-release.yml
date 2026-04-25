@@ -1,0 +1,161 @@
+name: nightly release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor:
+         - name: Standard
+           gradleTask: assembleStandardRelease
+           apkPath: app/build/outputs/apk/standard/release/app-standard-release.apk
+         - name: Ludashi
+           gradleTask: assembleLudashiRelease
+           apkPath: app/build/outputs/apk/ludashi/release/app-ludashi-release.apk
+         - name: PUBG
+           gradleTask: assemblePubgRelease
+           apkPath: app/build/outputs/apk/pubg/release/app-pubg-release.apk
+
+    steps:
+    - name: Clone repository
+      uses: actions/checkout@v6
+      with:
+        submodules: recursive
+        fetch-depth: 1
+        persist-credentials: false
+
+    - name: Cache LFS
+      uses: actions/cache@v5
+      with:
+        path: .git/lfs
+        key: lfs-${{ hashFiles('**/*.txz', '**/*.tzst') }}
+        restore-keys: lfs-
+
+    - name: Pull LFS files
+      run: git lfs pull
+
+    - name: Cache NDK build outputs
+      uses: actions/cache@v5
+      with:
+        path: |
+          app/.cxx
+          app/build/intermediates/cxx
+        key: ndk-${{ matrix.flavor.name }}-${{ hashFiles('app/src/main/cpp/**', 'app/build.gradle', 'app/src/main/cpp/CMakeLists.txt') }}
+        restore-keys: |
+          ndk-${{ matrix.flavor.name }}-
+          ndk-
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v5
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v6
+      with:
+        validate-wrappers: true
+        cache-cleanup: 'on-success'
+
+    - name: Decode keystore and build
+      timeout-minutes: 15
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        GRADLE_OPTS: -Xmx4g -XX:+UseG1GC
+      run: |
+        export KEYSTORE_FILE="${{ github.workspace }}/release.jks"
+        if [ -n "$KEYSTORE_BASE64" ]; then
+          echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_FILE"
+        else
+          export KEYSTORE_PASSWORD="dummypass"
+          export KEY_ALIAS="winnative"
+          export KEY_PASSWORD="dummypass"
+          keytool -genkey -v \
+            -keystore "$KEYSTORE_FILE" \
+            -alias winnative \
+            -keyalg RSA -keysize 2048 -validity 1 \
+            -storepass dummypass -keypass dummypass \
+            -dname "CN=CI, OU=CI, O=CI, L=CI, ST=CI, C=US"
+        fi
+        ./gradlew :app:${{ matrix.flavor.gradleTask }} --build-cache --parallel -x lint
+
+    - name: Compute artifact label
+      id: label
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "name=PR${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+        else
+          num=$(git log -1 --pretty=%s | grep -oE '\(#[0-9]+\)' | tail -1 | tr -d '(#)')
+          if [ -n "$num" ]; then
+            echo "name=PR${num}" >> "$GITHUB_OUTPUT"
+          else
+            short_sha=$(echo "$GITHUB_SHA" | cut -c1-7)
+            echo "name=main-${short_sha}" >> "$GITHUB_OUTPUT"
+          fi
+        fi
+
+    - name: Rename APK for upload
+      run: |
+        mkdir -p artifacts
+        cp ${{ matrix.flavor.apkPath }} "artifacts/WinNative-${{ matrix.flavor.name }}-release-${{ steps.label.outputs.name }}.apk"
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v7
+      with:
+        path: artifacts/WinNative-${{ matrix.flavor.name }}-release-${{ steps.label.outputs.name }}.apk
+        retention-days: 7
+        archive: false
+        if-no-files-found: error
+
+    - name: Generate tag
+      id: tag
+      run: |
+        DATE=$(date +'%Y-%m-%d')
+        echo "tag=${DATE}" >> $GITHUB_OUTPUT
+
+    - name: Upload to GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.tag.outputs.tag }}
+        name: WinNative
+        files: artifacts/WinNative-${{ matrix.flavor.name }}-release-${{ steps.label.outputs.name }}.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  cleanup-caches:
+    needs: build
+    if: ${{ always() && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+    - name: Cleanup duplicate caches
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh cache list --repo "$GITHUB_REPOSITORY" --json id,key,createdAt --limit 100 |
+          jq -r '
+            group_by(.key | sub("-[a-f0-9]{20,}$"; ""))
+            | .[]
+            | sort_by(.createdAt) | reverse
+            | .[1:][]
+            | .id
+          ' |
+          xargs -I {} gh cache delete {} --repo "$GITHUB_REPOSITORY" || true
