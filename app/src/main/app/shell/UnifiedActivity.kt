@@ -2051,7 +2051,14 @@ class UnifiedActivity :
                                         shortcut
                                             .getExtra("custom_name", shortcut.name)
                                             .ifBlank { shortcut.name }
-                                    val customId = -(displayName.hashCode().and(0x7FFFFFFF) + 1)
+                                    
+                                    val uuid = shortcut.getExtra("uuid")
+                                    val customId = if (uuid.isNotEmpty()) {
+                                        // Use UUID hash to ensure ID stability across renames
+                                        -(uuid.hashCode().and(0x7FFFFFFF) + 1)
+                                    } else {
+                                        -(displayName.hashCode().and(0x7FFFFFFF) + 1)
+                                    }
 
                                     SteamApp(
                                         id = customId,
@@ -6892,6 +6899,15 @@ class UnifiedActivity :
             }
         }
 
+        // Re-sync the list whenever the cross-store DownloadCoordinator records change. This
+        // is what makes PAUSED records (loaded from DB after app restart) appear in the tab,
+        // and what removes COMPLETE/CANCELLED/FAILED rows after Clear.
+        LaunchedEffect(syncDownloads) {
+            com.winlator.cmod.app.service.download.DownloadCoordinator.changes.collect {
+                latestSyncDownloads()
+            }
+        }
+
         downloads.forEach { (_, info) ->
             LaunchedEffect(info) {
                 info.getStatusFlow().collect {
@@ -6989,6 +7005,12 @@ class UnifiedActivity :
                             if (queueSize > 1) {
                                 queueSize--
                                 PrefManager.downloadQueueSize = queueSize
+                                // Tick the global coordinator so the new (lower) limit is
+                                // applied across all stores. Lowering doesn't auto-pause an
+                                // in-flight download; it just prevents new ones from starting
+                                // until the count drains under the new limit.
+                                com.winlator.cmod.app.service.download.DownloadCoordinator
+                                    .blockingTick()
                             }
                         },
                         modifier = Modifier.size(24.dp),
@@ -7011,8 +7033,9 @@ class UnifiedActivity :
                         onClick = {
                             queueSize++
                             PrefManager.downloadQueueSize = queueSize
-                            com.winlator.cmod.feature.stores.steam.service.SteamService
-                                .checkQueue()
+                            // Drain the global queue across all stores (Steam + Epic + GOG).
+                            com.winlator.cmod.app.service.download.DownloadCoordinator
+                                .blockingTick()
                         },
                         modifier = Modifier.size(24.dp),
                     ) {
@@ -7083,11 +7106,11 @@ class UnifiedActivity :
                     }
                 }
 
-                // Clear button - clears completed and cancelled downloads
+                // Clear button - clears completed, cancelled, and failed downloads
                 val hasCompletedOrCancelled =
                     downloads.any {
                         val s = it.second.getStatusFlow().value
-                        s == DownloadPhase.COMPLETE || s == DownloadPhase.CANCELLED
+                        s == DownloadPhase.COMPLETE || s == DownloadPhase.CANCELLED || s == DownloadPhase.FAILED
                     }
 
                 Spacer(Modifier.width(12.dp))
@@ -7142,13 +7165,40 @@ class UnifiedActivity :
                 }
             }
 
+            // Sort so the user always sees what's actually running first, then everything
+            // they can resume, then finished items, with cancelled at the very bottom.
+            // The list re-sorts on phase transitions because `tick` (incremented by the
+            // status flow collectors above) is read here, forcing recomposition.
+            @Suppress("UNUSED_EXPRESSION")
+            tick
+            val sortedDownloads =
+                downloads.sortedBy { (_, info) ->
+                    when (info.getStatusFlow().value) {
+                        // In-progress states grouped together at the top.
+                        DownloadPhase.DOWNLOADING,
+                        DownloadPhase.PREPARING,
+                        DownloadPhase.VERIFYING,
+                        DownloadPhase.PATCHING,
+                        DownloadPhase.APPLYING_DATA,
+                        DownloadPhase.FINALIZING,
+                        DownloadPhase.UNPACKING,
+                        DownloadPhase.UNKNOWN,
+                        -> 0
+                        DownloadPhase.PAUSED -> 1
+                        DownloadPhase.QUEUED -> 2
+                        DownloadPhase.COMPLETE -> 3
+                        DownloadPhase.FAILED -> 4
+                        DownloadPhase.CANCELLED -> 5
+                    }
+                }
+
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(downloads, key = { it.first }) { (id, info) ->
+                items(sortedDownloads, key = { it.first }) { (id, info) ->
                     DownloadItemDeck(id, info, isSelected = selectedId == id, onClick = {
                         if (selectedId == id) onSelectDownload(null) else onSelectDownload(id)
                     })
                 }
-                if (downloads.isEmpty()) {
+                if (sortedDownloads.isEmpty()) {
                     item { EmptyStateMessage("No active downloads.") }
                 }
             }
@@ -9687,12 +9737,12 @@ class UnifiedActivity :
                     if (path != null && (isExe || java.io.File(path).exists())) {
                         selectedExePath = path
                         gameFolder = detectGameFolder(path)
-                        // Auto-generate a game name from the folder name
+                        // Auto-generate a game name from the EXE name (without extension)
                         if (gameName.isBlank()) {
                             gameName =
                                 java.io
-                                    .File(gameFolder!!)
-                                    .name
+                                    .File(path)
+                                    .nameWithoutExtension
                                     .replace("_", " ")
                                     .replace("-", " ")
                         }
