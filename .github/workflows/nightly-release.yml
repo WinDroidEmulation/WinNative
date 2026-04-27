@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
 
     strategy:
       fail-fast: false
@@ -94,90 +94,27 @@ jobs:
         fi
         ./gradlew :app:${{ matrix.flavor.gradleTask }} --build-cache --parallel -x lint
 
-    - name: Rename APK for upload
-      run: |
-        mkdir -p artifacts
-        cp ${{ matrix.flavor.apkPath }} "artifacts/WinNative-${{ matrix.flavor.name }}.apk"
-
-    - name: Upload APK (artifact)
-      uses: actions/upload-artifact@v7
-      with:
-        name: apk-${{ matrix.flavor.name }}
-        path: artifacts/*.apk
-        retention-days: 7
-        archive: false
-        if-no-files-found: error
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-    - name: Checkout (for tags)
-      uses: actions/checkout@v6
-
-    - name: Download all artifacts
-      uses: actions/download-artifact@v7
-      with:
-        path: artifacts
-
-    - name: Generate daily tag with rX
+    - name: Generate tag
       id: version
       run: |
         DATE=$(date +'%Y-%m-%d')
-
-        # fetch all tags
         git fetch --tags
 
-        # count today's tags
         COUNT=$(git tag -l "${DATE}-r*" | wc -l)
-
         NEXT=$((COUNT + 1))
-        RUN="r${NEXT}"
-        TAG="${DATE}-${RUN}"
 
-        echo "date=${DATE}" >> $GITHUB_OUTPUT
-        echo "run=${RUN}" >> $GITHUB_OUTPUT
-        echo "tag=${TAG}" >> $GITHUB_OUTPUT
+        echo "tag=${DATE}-r${NEXT}" >> $GITHUB_OUTPUT
+        echo "run=r${NEXT}" >> $GITHUB_OUTPUT
 
-    - name: Rename APKs with rX
+    - name: Rename APK
       run: |
-        for file in artifacts/**/*.apk; do
-          base=$(basename "$file")
-          flavor=$(echo "$base" | sed 's/WinNative-\(.*\)\.apk/\1/')
-          mv "$file" "artifacts/WinNative-${flavor}-${{ steps.version.outputs.run }}.apk"
-        done
+        cp ${{ matrix.flavor.apkPath }} "WinNative-${{ matrix.flavor.name }}-${{ steps.version.outputs.run }}.apk"
 
     - name: Upload to GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.version.outputs.tag }}
         name: WinNative Nightly Release (${{ steps.version.outputs.tag }})
-        files: artifacts/**/*.apk
+        files: WinNative-${{ matrix.flavor.name }}-${{ steps.version.outputs.run }}.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  cleanup-caches:
-    needs: release
-    if: ${{ always() && github.event_name == 'push' }}
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-    steps:
-    - name: Cleanup duplicate caches
-      continue-on-error: true
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh cache list --repo "$GITHUB_REPOSITORY" --json id,key,createdAt --limit 100 |
-          jq -r '
-            group_by(.key | sub("-[a-f0-9]{20,}$"; ""))
-            | .[]
-            | sort_by(.createdAt) | reverse
-            | .[1:][]
-            | .id
-          ' |
-          xargs -I {} gh cache delete {} --repo "$GITHUB_REPOSITORY" || true
