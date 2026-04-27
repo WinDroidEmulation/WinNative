@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
+      contents: read
 
     strategy:
       fail-fast: false
@@ -94,51 +94,73 @@ jobs:
         fi
         ./gradlew :app:${{ matrix.flavor.gradleTask }} --build-cache --parallel -x lint
 
-    - name: Compute artifact label
-      id: label
-      run: |
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          echo "name=PR${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-        else
-          num=$(git log -1 --pretty=%s | grep -oE '\(#[0-9]+\)' | tail -1 | tr -d '(#)')
-          if [ -n "$num" ]; then
-            echo "name=PR${num}" >> "$GITHUB_OUTPUT"
-          else
-            short_sha=$(echo "$GITHUB_SHA" | cut -c1-7)
-            echo "name=main-${short_sha}" >> "$GITHUB_OUTPUT"
-          fi
-        fi
-
     - name: Rename APK for upload
       run: |
         mkdir -p artifacts
-        cp ${{ matrix.flavor.apkPath }} "artifacts/WinNative-${{ matrix.flavor.name }}-release-${{ steps.label.outputs.name }}.apk"
+        cp ${{ matrix.flavor.apkPath }} "artifacts/WinNative-${{ matrix.flavor.name }}.apk"
 
-    - name: Upload APK
+    - name: Upload APK (artifact)
       uses: actions/upload-artifact@v7
       with:
-        path: artifacts/WinNative-${{ matrix.flavor.name }}-release-${{ steps.label.outputs.name }}.apk
+        name: apk-${{ matrix.flavor.name }}
+        path: artifacts/*.apk
         retention-days: 7
         archive: false
         if-no-files-found: error
 
-    - name: Generate tag
-      id: tag
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout (for tags)
+      uses: actions/checkout@v6
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v7
+      with:
+        path: artifacts
+
+    - name: Generate daily tag with rX
+      id: version
       run: |
         DATE=$(date +'%Y-%m-%d')
-        echo "tag=${DATE}" >> $GITHUB_OUTPUT
+
+        # fetch all tags
+        git fetch --tags
+
+        # count today's tags
+        COUNT=$(git tag -l "${DATE}-r*" | wc -l)
+
+        NEXT=$((COUNT + 1))
+        RUN="r${NEXT}"
+        TAG="${DATE}-${RUN}"
+
+        echo "date=${DATE}" >> $GITHUB_OUTPUT
+        echo "run=${RUN}" >> $GITHUB_OUTPUT
+        echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+    - name: Rename APKs with rX
+      run: |
+        for file in artifacts/**/*.apk; do
+          base=$(basename "$file")
+          flavor=$(echo "$base" | sed 's/WinNative-\(.*\)\.apk/\1/')
+          mv "$file" "artifacts/WinNative-${flavor}-${{ steps.version.outputs.run }}.apk"
+        done
 
     - name: Upload to GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ steps.tag.outputs.tag }}
-        name: WinNative
-        files: artifacts/WinNative-${{ matrix.flavor.name }}-release-${{ steps.label.outputs.name }}.apk
+        tag_name: ${{ steps.version.outputs.tag }}
+        name: WinNative Nightly Release (${{ steps.version.outputs.tag }})
+        files: artifacts/**/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   cleanup-caches:
-    needs: build
+    needs: release
     if: ${{ always() && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     permissions:
