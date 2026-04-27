@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: nightly-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -94,27 +94,60 @@ jobs:
         fi
         ./gradlew :app:${{ matrix.flavor.gradleTask }} --build-cache --parallel -x lint
 
+    - name: Compute artifact label
+      id: label
+      run: |
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "name=PR${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+        else
+          num=$(git log -1 --pretty=%s | grep -oE '\(#[0-9]+\)' | tail -1 | tr -d '(#)')
+          if [ -n "$num" ]; then
+            echo "name=PR${num}" >> "$GITHUB_OUTPUT"
+          else
+            short_sha=$(echo "$GITHUB_SHA" | cut -c1-7)
+            echo "name=main-${short_sha}" >> "$GITHUB_OUTPUT"
+          fi
+        fi
+
+    - name: Rename APK for upload
+      run: |
+        mkdir -p artifacts
+        cp ${{ matrix.flavor.apkPath }} "artifacts/WinNative-${{ matrix.flavor.name }}-release-${{ steps.label.outputs.name }}.apk"
+
     - name: Generate tag
-      id: version
+      id: tag
       run: |
         DATE=$(date +'%Y-%m-%d')
-        git fetch --tags
-
-        COUNT=$(git tag -l "${DATE}-r*" | wc -l)
-        NEXT=$((COUNT + 1))
-
-        echo "tag=${DATE}-r${NEXT}" >> $GITHUB_OUTPUT
-        echo "run=r${NEXT}" >> $GITHUB_OUTPUT
-
-    - name: Rename APK
-      run: |
-        cp ${{ matrix.flavor.apkPath }} "WinNative-${{ matrix.flavor.name }}-${{ steps.version.outputs.run }}.apk"
+        echo "tag=${DATE}" >> $GITHUB_OUTPUT
 
     - name: Upload to GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ steps.version.outputs.tag }}
-        name: WinNative Nightly Release (${{ steps.version.outputs.tag }})
-        files: WinNative-${{ matrix.flavor.name }}-${{ steps.version.outputs.run }}.apk
+        tag_name: ${{ steps.tag.outputs.tag }}
+        name: WinNative
+        files: artifacts/WinNative-${{ matrix.flavor.name }}-release-${{ steps.label.outputs.name }}.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  cleanup-caches:
+    needs: build
+    if: ${{ always() && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+    - name: Cleanup duplicate caches
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh cache list --repo "$GITHUB_REPOSITORY" --json id,key,createdAt --limit 100 |
+          jq -r '
+            group_by(.key | sub("-[a-f0-9]{20,}$"; ""))
+            | .[]
+            | sort_by(.createdAt) | reverse
+            | .[1:][]
+            | .id
+          ' |
+          xargs -I {} gh cache delete {} --repo "$GITHUB_REPOSITORY" || true
