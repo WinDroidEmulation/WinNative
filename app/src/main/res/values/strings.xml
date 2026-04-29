@@ -17,6 +17,7 @@
     <string name="common_ui_select_folder">Select Folder</string>
     <string name="common_ui_current_folder">Current Folder</string>
     <string name="common_ui_select_valid_exe_file">Please select a valid .exe file</string>
+    <string name="fexcore_env_var_help__smc_checks">Control of self-modifying code.</string>
     <string name="common_ui_select_valid_icon_file">Please select a valid .ico or .png file.</string>
     <string name="common_ui_exit">Exit</string>
     <string name="common_ui_profile">Profile</string>
