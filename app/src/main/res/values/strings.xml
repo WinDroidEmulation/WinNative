@@ -2,6 +2,7 @@
 
 <resources>
     <!-- Common > UI Labels -->
+    <string name="fexcore_env_var_help__smc_checks">Control of self-modifying code.</string>
     <string name="common_ui_app_name">WinNative</string>
     <string name="common_ui_run">Run</string>
     <string name="common_ui_edit">Edit</string>
